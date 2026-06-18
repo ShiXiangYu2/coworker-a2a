@@ -6,12 +6,24 @@
  */
 
 import { GRILL_ME_SKILL_PROMPT } from './grill-me'
+import { GRILL_WITH_DOCS_SKILL_PROMPT } from './grill-with-docs'
 import { TO_PRD_SKILL_PROMPT } from './to-prd'
 import { TDD_SKILL_PROMPT } from './tdd'
 import { DIAGNOSE_SKILL_PROMPT } from './diagnose'
 import { LOOP_REVIEW_SKILL_PROMPT } from './loop-review'
 import { AI_BUILDER_METHODOLOGY_SKILL_PROMPT } from './ai-builder-methodology'
 import { ZOOM_OUT_SKILL_PROMPT } from './zoom-out'
+import { PROTOTYPE_SKILL_PROMPT } from './prototype'
+import { UI_REVIEW_SKILL_PROMPT } from './ui-review'
+import { KNOWLEDGE_TO_SKILL_SKILL_PROMPT } from './knowledge-to-skill'
+import { API_DESIGN_SKILL_PROMPT } from './api-design'
+import { DB_DESIGN_SKILL_PROMPT } from './db-design'
+import { IMPROVE_CODEBASE_ARCHITECTURE_SKILL_PROMPT } from './improve-codebase-architecture'
+import { HANDOFF_SKILL_PROMPT } from './handoff'
+import { TO_ISSUES_SKILL_PROMPT } from './to-issues'
+import { TRIAGE_SKILL_PROMPT } from './triage'
+import { CLEANUP_MISSION_SKILL_PROMPT } from './cleanup-mission'
+import { SIGNAL_ANALYZER_SKILL_PROMPT } from './signal-analyzer'
 
 /** Skill Prompt 定义 */
 export interface SkillPrompt {
@@ -77,6 +89,90 @@ const skillPrompts: SkillPrompt[] = [
     sourceSkill: 'zoom-out',
     applicableAgents: ['bezos'],
     prompt: ZOOM_OUT_SKILL_PROMPT,
+  },
+  {
+    name: 'grill-with-docs',
+    description: '带文档审查的追问，挑战计划并更新 CONTEXT.md 和 ADRs',
+    sourceSkill: 'grill-with-docs',
+    applicableAgents: ['jobs'],
+    prompt: GRILL_WITH_DOCS_SKILL_PROMPT,
+  },
+  {
+    name: 'prototype',
+    description: '快速原型验证，回答设计问题后再决定保留或丢弃',
+    sourceSkill: 'prototype',
+    applicableAgents: ['jobs'],
+    prompt: PROTOTYPE_SKILL_PROMPT,
+  },
+  {
+    name: 'ui-review',
+    description: '标准化 UI 走查流程，检查页面加载、响应式布局、交互反馈',
+    sourceSkill: 'ui-review',
+    applicableAgents: ['jobs', 'turing'],
+    prompt: UI_REVIEW_SKILL_PROMPT,
+  },
+  {
+    name: 'knowledge-to-skill',
+    description: '知识到 Skill 提取，把书籍、课程、经验转化为可调用能力',
+    sourceSkill: 'knowledge-to-skill',
+    applicableAgents: ['jobs'],
+    prompt: KNOWLEDGE_TO_SKILL_SKILL_PROMPT,
+  },
+  {
+    name: 'api-design',
+    description: '标准化 API 设计流程，生成 API 文档、Mock 数据和测试用例',
+    sourceSkill: 'api-design',
+    applicableAgents: ['linus'],
+    prompt: API_DESIGN_SKILL_PROMPT,
+  },
+  {
+    name: 'db-design',
+    description: '标准化数据库设计流程，生成数据模型、迁移脚本和种子数据',
+    sourceSkill: 'db-design',
+    applicableAgents: ['linus'],
+    prompt: DB_DESIGN_SKILL_PROMPT,
+  },
+  {
+    name: 'improve-codebase-architecture',
+    description: '发现代码库架构深化机会，将浅模块转化为深模块',
+    sourceSkill: 'improve-codebase-architecture',
+    applicableAgents: ['linus'],
+    prompt: IMPROVE_CODEBASE_ARCHITECTURE_SKILL_PROMPT,
+  },
+  {
+    name: 'handoff',
+    description: '将当前对话压缩为交接文档，让另一个 Agent 可以继续工作',
+    sourceSkill: 'handoff',
+    applicableAgents: ['linus'],
+    prompt: HANDOFF_SKILL_PROMPT,
+  },
+  {
+    name: 'to-issues',
+    description: '将计划、规格或 PRD 拆分为可独立领取的 Issue',
+    sourceSkill: 'to-issues',
+    applicableAgents: ['elon'],
+    prompt: TO_ISSUES_SKILL_PROMPT,
+  },
+  {
+    name: 'triage',
+    description: 'Issue 分类，通过状态机驱动的分类角色管理 Issue',
+    sourceSkill: 'triage',
+    applicableAgents: ['elon'],
+    prompt: TRIAGE_SKILL_PROMPT,
+  },
+  {
+    name: 'cleanup-mission',
+    description: '清理部分完成的 Mission 创建的所有资源',
+    sourceSkill: 'cleanup-mission',
+    applicableAgents: ['elon'],
+    prompt: CLEANUP_MISSION_SKILL_PROMPT,
+  },
+  {
+    name: 'signal-analyzer',
+    description: '对原始发现进行交叉分析，识别关联模式并生成行动建议',
+    sourceSkill: 'signal-analyzer',
+    applicableAgents: ['bezos'],
+    prompt: SIGNAL_ANALYZER_SKILL_PROMPT,
   },
 ]
 

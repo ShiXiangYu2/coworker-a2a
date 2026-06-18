@@ -14,6 +14,7 @@ import { buildAgentSystemPrompt } from '@/lib/agents/prompts/skills'
 import type { HarmonyTask } from '@/lib/harmony/types'
 import type { AgentResult } from './types'
 import { produceDeterministicAgentResult } from './producer'
+import { resolveAgentContext } from './context-resolver'
 
 /**
  * 为指定 Agent 构建 System Prompt（使用 Skill Prompt + 强制工具调用指令）
@@ -180,7 +181,18 @@ export async function produceLLMAgentResult(
 
   try {
     const provider = getLLMProvider()
-    const systemPrompt = getAgentSystemPrompt(agentId)
+    let systemPrompt = getAgentSystemPrompt(agentId)
+
+    // 注入多 Agent 协作上下文
+    const resolvedContext = await resolveAgentContext(
+      agentId,
+      task.id,
+      task.conversationId
+    )
+    if (resolvedContext) {
+      systemPrompt += `\n\n---\n\n## 相关上下文\n\n以下是同一对话中其他 Agent 的分析结果和相关记忆，供你参考。请注意：这些是历史记录，不代表当前任务的状态。\n\n${resolvedContext.context}`
+      console.log(`[LLM-Producer] Injected context: ${resolvedContext.stats.completedResults} results, ${resolvedContext.stats.a2aMessages} messages, ${resolvedContext.stats.memoryEntries} memories (${resolvedContext.stats.totalLength} chars)`)
+    }
 
     const userMessage = [
       `## Task`,
@@ -214,6 +226,10 @@ export async function produceLLMAgentResult(
       // Always ensure safety note is present
       if (!agentResult.safetyNotes.some((n) => n.includes('analysis only'))) {
         agentResult.safetyNotes.push(LLM_SAFETY_NOTE)
+      }
+      // 记录上下文快照
+      if (resolvedContext) {
+        agentResult.contextSnapshot = resolvedContext.stats
       }
       return agentResult
     }

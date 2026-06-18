@@ -93,6 +93,12 @@ export interface AgentOutput {
 
 // ─── Sprint 20: Agent 审查协议 ────────────────────────────
 
+export type AgentResultNextAction =
+  | 'stop'
+  | 'show_result'
+  | 'ask_human_confirmation'
+  | 'request_more_context'
+
 export type ReviewVerdict = 'approve' | 'request_changes' | 'reject'
 
 export interface AgentReview {

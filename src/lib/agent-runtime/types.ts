@@ -117,6 +117,13 @@ export interface AgentResult {
     requiresHumanConfirmation: boolean
   }[]
   toolCallCandidates?: ToolCallCandidate[]
+  /** 本次执行看到的上下文快照（来自其他 Agent 的历史输出） */
+  contextSnapshot?: {
+    completedResults: number
+    a2aMessages: number
+    memoryEntries: number
+    totalLength: number
+  }
 }
 
 export interface AgentRun {

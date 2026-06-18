@@ -1,4 +1,5 @@
 import { decodeJson } from '@/lib/harmony/serializers'
+import { assignLayer } from './rules'
 import type { EvalCheck, EvalFinding, EvalRun, EvalTarget } from './types'
 
 function dateToString(value: Date | null | undefined): string | undefined {
@@ -129,6 +130,7 @@ export function serializeEvalCheck(record: {
     checkKey: record.checkKey,
     title: record.title,
     category: record.category as EvalCheck['category'],
+    layer: assignLayer(record.checkKey, record.title),
     status: record.status as EvalCheck['status'],
     severity: record.severity as EvalCheck['severity'],
     confidence: record.confidence,

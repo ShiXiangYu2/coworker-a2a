@@ -1,10 +1,11 @@
 /**
  * GET /api/conversations - 获取对话列表
+ * POST /api/conversations - 创建新对话
  *
  * 返回按更新时间倒序排列的对话列表
  */
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { handleAPIError } from '@/lib/errors'
 
@@ -22,6 +23,26 @@ export async function GET() {
     })
 
     return NextResponse.json(conversations)
+  } catch (error) {
+    const { message, statusCode } = handleAPIError(error)
+    return NextResponse.json({ error: message }, { status: statusCode })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { title } = body
+
+    const conversationTitle = (typeof title === 'string' && title.trim())
+      ? title.trim()
+      : '新对话'
+
+    const conversation = await prisma.conversation.create({
+      data: { title: conversationTitle },
+    })
+
+    return NextResponse.json(conversation, { status: 201 })
   } catch (error) {
     const { message, statusCode } = handleAPIError(error)
     return NextResponse.json({ error: message }, { status: statusCode })

@@ -90,6 +90,16 @@ export type EvalCheckCategory =
   | 'regression'
   | 'provenance'
 
+/**
+ * 四层 Eval 体系（来自 auto-dev-framework）
+ *
+ * - functional:  功能正确层 — 做没做对
+ * - performance: 性能安全层 — 稳不稳、安全不安全
+ * - boundary:    边界异常层 — 坏情况能不能处理
+ * - business:    业务价值层 — 值不值得做
+ */
+export type EvalLayerCategory = 'functional' | 'performance' | 'boundary' | 'business'
+
 export type EvalCheckStatus = 'passed' | 'warned' | 'failed' | 'blocked' | 'skipped'
 export type EvalSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical'
 
@@ -100,6 +110,8 @@ export interface EvalCheck {
   checkKey: string
   title: string
   category: EvalCheckCategory
+  /** 四层 Eval 分类（functional / performance / boundary / business） */
+  layer?: EvalLayerCategory
   status: EvalCheckStatus
   severity: EvalSeverity
   confidence: number

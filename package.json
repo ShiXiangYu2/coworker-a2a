@@ -1,4 +1,7 @@
 {
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
+  },
   "name": "coworker-a2a",
   "version": "0.1.0",
   "private": true,
