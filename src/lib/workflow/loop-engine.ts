@@ -16,7 +16,7 @@ import { prisma } from '@/lib/prisma'
 import { startAgentRunFromTask } from '@/lib/agent-runtime/repository'
 import { produceDeterministicEval } from '@/lib/eval/rules'
 import { transitionHarmonyTask } from '@/lib/harmony/state-machine'
-import type { HarmonyTaskStatus } from '@/lib/harmony/types'
+import { isHarmonyTaskStatus, type HarmonyTaskStatus } from '@/lib/harmony/types'
 import {
   createInitialLoopState,
   shouldTerminate,
@@ -34,6 +34,12 @@ function log(level: 'info' | 'warn' | 'error', message: string, data?: Record<st
   if (level === 'error') console.error(`${prefix} ${message}${suffix}`)
   else if (level === 'warn') console.warn(`${prefix} ${message}${suffix}`)
   else console.log(`${prefix} ${message}${suffix}`)
+}
+
+function readHarmonyTaskStatus(status: string, taskId: string): HarmonyTaskStatus | null {
+  if (isHarmonyTaskStatus(status)) return status
+  log('warn', 'Skipping HarmonyTask transition for unknown status', { taskId, status })
+  return null
 }
 
 // ─── 扫描 ────────────────────────────────────────────────────────────
@@ -222,10 +228,15 @@ async function advanceTask(
     return { newStatus: 'failed', event: 'TASK_FAILED' }
   }
 
+  const currentStatus = readHarmonyTaskStatus(task.status, taskId)
+  if (!currentStatus) {
+    return { newStatus: 'failed', event: 'TASK_FAILED' }
+  }
+
   // 执行失败
   if (!executionResult.success) {
     try {
-      const newStatus = transitionHarmonyTask(task.status as never, 'FAIL')
+      const newStatus = transitionHarmonyTask(currentStatus, 'FAIL')
       await prisma.harmonyTask.update({
         where: { id: taskId },
         data: {
@@ -235,14 +246,14 @@ async function advanceTask(
       })
       return { newStatus, event: 'TASK_FAILED' }
     } catch {
-      return { newStatus: task.status as HarmonyTaskStatus, event: 'TASK_FAILED' }
+      return { newStatus: currentStatus, event: 'TASK_FAILED' }
     }
   }
 
   // 需要人工确认
   if (executionResult.needsHumanConfirmation) {
     try {
-      const newStatus = transitionHarmonyTask(task.status as never, 'REQUEST_CONFIRMATION_FROM_ANALYSIS')
+      const newStatus = transitionHarmonyTask(currentStatus, 'REQUEST_CONFIRMATION_FROM_ANALYSIS')
       await prisma.harmonyTask.update({
         where: { id: taskId },
         data: {
@@ -260,7 +271,7 @@ async function advanceTask(
   // 审查被阻塞
   if (reviewResult.decision === 'blocked') {
     try {
-      const newStatus = transitionHarmonyTask(task.status as never, 'BLOCK')
+      const newStatus = transitionHarmonyTask(currentStatus, 'BLOCK')
       await prisma.harmonyTask.update({
         where: { id: taskId },
         data: {
@@ -277,7 +288,7 @@ async function advanceTask(
   // 审查失败
   if (reviewResult.decision === 'fail') {
     try {
-      const newStatus = transitionHarmonyTask(task.status as never, 'FAIL')
+      const newStatus = transitionHarmonyTask(currentStatus, 'FAIL')
       await prisma.harmonyTask.update({
         where: { id: taskId },
         data: {
@@ -293,7 +304,7 @@ async function advanceTask(
 
   // 审查通过 → 完成
   try {
-    const newStatus = transitionHarmonyTask(task.status as never, 'MARK_COMPLETED')
+    const newStatus = transitionHarmonyTask(currentStatus, 'MARK_COMPLETED')
     await prisma.harmonyTask.update({
       where: { id: taskId },
       data: {
@@ -303,7 +314,7 @@ async function advanceTask(
     })
     return { newStatus, event: 'TASK_SUCCEEDED' }
   } catch {
-    return { newStatus: task.status as HarmonyTaskStatus, event: 'TASK_FAILED' }
+    return { newStatus: currentStatus, event: 'TASK_FAILED' }
   }
 }
 

@@ -54,8 +54,10 @@ export class StepFunLLMProvider implements LLMProvider {
   private async fetchWithRetry(
     url: string,
     options: RequestInit,
-    isStream = false
+    _isStream = false
   ): Promise<Response> {
+    void _isStream
+
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt <= this.retryCount; attempt++) {
@@ -136,10 +138,9 @@ export class StepFunLLMProvider implements LLMProvider {
 
       const decoder = new TextDecoder()
       let buffer = ''
-      let streamDone = false
 
       try {
-        while (!streamDone) {
+        while (true) {
           const { done, value } = await reader.read()
           if (done) break
 

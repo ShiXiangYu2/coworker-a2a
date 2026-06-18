@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   createInitialLoopState,
   shouldTerminate,
@@ -6,7 +6,6 @@ import {
   InvalidLoopTransitionError,
   DEFAULT_LOOP_CONFIG,
   type LoopConfig,
-  type LoopState,
 } from '../loop-state'
 
 describe('Loop State', () => {

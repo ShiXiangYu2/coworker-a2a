@@ -14,8 +14,6 @@
 import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import type { AgentId, AgentResultNextAction } from '@/lib/agents/types'
-import { getAgentById } from '@/lib/agents/registry'
-import { produceDeterministicEval } from '@/lib/eval/rules'
 import {
   createSubtasks,
   getExecutableSubtasks,
@@ -25,7 +23,6 @@ import {
   type SubtaskRecord,
 } from './subtask-manager'
 import { startAgentRunFromTask } from './repository'
-import { resolveAgentContext } from './context-resolver'
 
 // ─── 类型 ────────────────────────────────────────────────────────────
 
@@ -105,6 +102,8 @@ async function decomposeTask(
   taskId: string,
   conversationId: string
 ): Promise<SubtaskDefinition[]> {
+  void conversationId
+
   // 查询父任务信息
   const parentTask = await prisma.harmonyTask.findUnique({
     where: { id: taskId },
@@ -270,7 +269,7 @@ async function decomposeWithElon(
  */
 async function executeSubtask(
   record: SubtaskRecord,
-  conversationId: string,
+  _conversationId: string,
   maxRetries: number
 ): Promise<SubtaskRecord> {
   if (!record.harmonyTaskId) {
@@ -393,13 +392,15 @@ async function executeBatch(
  */
 async function summarizeResults(
   subtasks: SubtaskRecord[],
-  summaryAgentId: AgentId
+  _summaryAgentId: AgentId
 ): Promise<{
   summary: string
   confidence: number
   needsHumanReview: boolean
   summaryReason: string
 }> {
+  void _summaryAgentId
+
   const collected = collectResults(subtasks)
 
   // 计算整体置信度

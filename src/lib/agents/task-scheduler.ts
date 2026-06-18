@@ -27,8 +27,10 @@ export interface ScheduleResult {
  */
 export async function scheduleSubTasks(
   subtasks: SubTask[],
-  context: { message: string }
+  _context: { message: string }
 ): Promise<ScheduleResult> {
+  void _context
+
   const startTime = Date.now()
   const results: SubTaskResult[] = new Array(subtasks.length)
   const completed = new Set<number>()

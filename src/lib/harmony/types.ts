@@ -19,6 +19,21 @@ export type HarmonyTaskStatus =
   | 'failed'
   | 'cancelled'
 
+export const HARMONY_TASK_STATUSES: readonly HarmonyTaskStatus[] = [
+  'draft',
+  'pending_confirmation',
+  'queued',
+  'assigned',
+  'blocked',
+  'completed',
+  'failed',
+  'cancelled',
+]
+
+export function isHarmonyTaskStatus(status: string): status is HarmonyTaskStatus {
+  return HARMONY_TASK_STATUSES.includes(status as HarmonyTaskStatus)
+}
+
 export type HarmonyTaskEvent =
   | 'CREATE_FROM_ROUTE'
   | 'REQUIRE_CONFIRMATION'

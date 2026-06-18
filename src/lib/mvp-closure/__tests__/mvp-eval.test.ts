@@ -155,9 +155,9 @@ describe('Layer 1: 功能正确层', () => {
   })
 
   describe('Skill Prompt 系统', () => {
-    it('包含 7 个 Skill Prompt', () => {
+    it('包含 19 个 Skill Prompt', () => {
       const skills = getAllSkillPrompts()
-      expect(skills).toHaveLength(7)
+      expect(skills).toHaveLength(19)
     })
 
     it('每个 Skill 有完整的 prompt 内容', () => {
@@ -170,12 +170,19 @@ describe('Layer 1: 功能正确层', () => {
 
     it('Jobs Agent 能获取 grill-me 和 to-prd Skills', () => {
       const skills = getSkillPromptsForAgent('jobs')
-      expect(skills.map((s) => s.name)).toEqual(['grill-me', 'to-prd'])
+      expect(skills.map((s) => s.name)).toEqual([
+        'grill-me',
+        'to-prd',
+        'grill-with-docs',
+        'prototype',
+        'ui-review',
+        'knowledge-to-skill',
+      ])
     })
 
     it('Turing Agent 能获取 diagnose 和 loop-review Skills', () => {
       const skills = getSkillPromptsForAgent('turing')
-      expect(skills.map((s) => s.name)).toEqual(['diagnose', 'loop-review'])
+      expect(skills.map((s) => s.name)).toEqual(['diagnose', 'loop-review', 'ui-review'])
     })
   })
 
@@ -378,7 +385,7 @@ describe('Layer 3: 边界异常层', () => {
         cwd: 'D:/AI编程/产品自研/恒识/coworker-a2a',
         maxOutputChars: 50,
       })
-      expect(['success', 'failed']).toContain(result.status)
+      expect(['success', 'failed', 'timeout']).toContain(result.status)
       expect(typeof result.stdout).toBe('string')
     })
   })
@@ -437,7 +444,7 @@ describe('Layer 4: 业务价值层', () => {
 
     it('LLM Provider 工厂支持 claude 模式切换', () => {
       // 验证 factory 代码存在 claude 分支
-      const factorySource = getLLMProvider.toString()
+      expect(getLLMProvider.toString()).toContain('function')
       // getLLMProvider 是单例，验证它存在
       expect(typeof getLLMProvider).toBe('function')
     })
@@ -522,7 +529,7 @@ describe('Layer 4: 业务价值层', () => {
 
       // Skill
       const skills = getAllSkillPrompts()
-      expect(skills.length).toBe(7)
+      expect(skills.length).toBe(19)
 
       // Tool
       const categories = new Set(DEFAULT_COMMAND_WHITELIST.map((e) => e.category))

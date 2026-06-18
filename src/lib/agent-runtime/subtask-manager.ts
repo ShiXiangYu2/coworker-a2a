@@ -10,11 +10,10 @@
  * 安全：子任务创建和状态更新都经过 harmony state machine 校验。
  */
 
-import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import type { AgentId } from '@/lib/agents/types'
 import { transitionHarmonyTask } from '@/lib/harmony/state-machine'
-import { emptySideEffects } from '@/lib/harmony/types'
+import { emptySideEffects, isHarmonyTaskStatus } from '@/lib/harmony/types'
 
 // ─── 类型 ────────────────────────────────────────────────────────────
 
@@ -77,6 +76,17 @@ function log(level: 'info' | 'warn' | 'error', message: string, data?: Record<st
   if (level === 'error') console.error(`${prefix} ${message}${suffix}`)
   else if (level === 'warn') console.warn(`${prefix} ${message}${suffix}`)
   else console.log(`${prefix} ${message}${suffix}`)
+}
+
+function syncHarmonyTaskStatus(
+  status: string,
+  event: Parameters<typeof transitionHarmonyTask>[1]
+): ReturnType<typeof transitionHarmonyTask> | null {
+  if (!isHarmonyTaskStatus(status)) {
+    log('warn', 'Skipping HarmonyTask sync for unknown status', { status, event })
+    return null
+  }
+  return transitionHarmonyTask(status, event)
 }
 
 // ─── 创建子任务 ──────────────────────────────────────────────────────
@@ -217,11 +227,13 @@ export async function updateSubtaskStatus(
         select: { status: true },
       })
       if (task) {
-        const newStatus = transitionHarmonyTask(task.status as never, 'ASSIGN_PLACEHOLDER')
-        await prisma.harmonyTask.update({
-          where: { id: record.harmonyTaskId },
-          data: { status: newStatus },
-        })
+        const newStatus = syncHarmonyTaskStatus(task.status, 'ASSIGN_PLACEHOLDER')
+        if (newStatus) {
+          await prisma.harmonyTask.update({
+            where: { id: record.harmonyTaskId },
+            data: { status: newStatus },
+          })
+        }
       }
     } catch (error) {
       log('warn', `Failed to sync HarmonyTask status: ${error}`)
@@ -235,14 +247,16 @@ export async function updateSubtaskStatus(
         select: { status: true },
       })
       if (task) {
-        const newStatus = transitionHarmonyTask(task.status as never, 'MARK_COMPLETED')
-        await prisma.harmonyTask.update({
-          where: { id: record.harmonyTaskId },
-          data: {
-            status: newStatus,
-            statusReason: options?.resultSummary ?? 'Subtask completed by orchestrator.',
-          },
-        })
+        const newStatus = syncHarmonyTaskStatus(task.status, 'MARK_COMPLETED')
+        if (newStatus) {
+          await prisma.harmonyTask.update({
+            where: { id: record.harmonyTaskId },
+            data: {
+              status: newStatus,
+              statusReason: options?.resultSummary ?? 'Subtask completed by orchestrator.',
+            },
+          })
+        }
       }
     } catch (error) {
       log('warn', `Failed to sync HarmonyTask completion: ${error}`)
@@ -256,14 +270,16 @@ export async function updateSubtaskStatus(
         select: { status: true },
       })
       if (task) {
-        const newStatus = transitionHarmonyTask(task.status as never, 'FAIL')
-        await prisma.harmonyTask.update({
-          where: { id: record.harmonyTaskId },
-          data: {
-            status: newStatus,
-            statusReason: options?.error ?? 'Subtask failed.',
-          },
-        })
+        const newStatus = syncHarmonyTaskStatus(task.status, 'FAIL')
+        if (newStatus) {
+          await prisma.harmonyTask.update({
+            where: { id: record.harmonyTaskId },
+            data: {
+              status: newStatus,
+              statusReason: options?.error ?? 'Subtask failed.',
+            },
+          })
+        }
       }
     } catch (error) {
       log('warn', `Failed to sync HarmonyTask failure: ${error}`)

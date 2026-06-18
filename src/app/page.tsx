@@ -80,6 +80,9 @@ export default async function HomePage() {
           <p className="mt-2 max-w-md text-sm text-gray-500">
             基于多 Agent 协作的个人 AI 生产系统。选择左侧对话或新建对话开始。
           </p>
+          <p className="mt-2 max-w-md text-xs text-gray-400">
+            v1 local governance workspace without hidden runtime authorization.
+          </p>
           <div className="mt-6 flex items-center justify-center gap-3">
             <Link
               href="/operator"

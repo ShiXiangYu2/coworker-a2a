@@ -25,6 +25,11 @@ interface HarmonyTask {
   steps: AgentStep[]
 }
 
+interface HarmonyTaskResponse extends Omit<HarmonyTask, 'steps'> {
+  steps?: AgentStep[]
+  agentSteps?: AgentStep[]
+}
+
 interface TaskPanelProps {
   conversationId: string
   refreshKey?: number
@@ -46,6 +51,13 @@ const STEP_STATUS_STYLES: Record<string, { dot: string; text: string }> = {
   failed:    { dot: 'bg-red-500', text: 'text-red-600' },
 }
 
+export function normalizeTask(task: HarmonyTaskResponse): HarmonyTask {
+  return {
+    ...task,
+    steps: task.steps ?? task.agentSteps ?? [],
+  }
+}
+
 export function TaskPanel({ conversationId, refreshKey = 0 }: TaskPanelProps) {
   const [tasks, setTasks] = useState<HarmonyTask[]>([])
   const [loading, setLoading] = useState(true)
@@ -56,7 +68,10 @@ export function TaskPanel({ conversationId, refreshKey = 0 }: TaskPanelProps) {
       const response = await fetch(`/api/conversations/${conversationId}/tasks`)
       if (!response.ok) return
       const data = await response.json()
-      setTasks(data.data ?? [])
+      const nextTasks = Array.isArray(data.data)
+        ? data.data.map((task: HarmonyTaskResponse) => normalizeTask(task))
+        : []
+      setTasks(nextTasks)
     } catch {
       // Silently fail
     } finally {
@@ -65,7 +80,10 @@ export function TaskPanel({ conversationId, refreshKey = 0 }: TaskPanelProps) {
   }, [conversationId])
 
   useEffect(() => {
-    void fetchTasks()
+    const timeout = window.setTimeout(() => {
+      void fetchTasks()
+    }, 0)
+    return () => window.clearTimeout(timeout)
   }, [fetchTasks, refreshKey])
 
   // 定时刷新 running 状态的任务
@@ -111,8 +129,9 @@ export function TaskPanel({ conversationId, refreshKey = 0 }: TaskPanelProps) {
           tasks.map((task) => {
             const style = STATUS_STYLES[task.status] ?? STATUS_STYLES.pending
             const isExpanded = expandedTaskId === task.id
-            const completedSteps = task.steps.filter((s) => s.status === 'completed').length
-            const totalSteps = task.steps.length
+            const steps = task.steps ?? []
+            const completedSteps = steps.filter((s) => s.status === 'completed').length
+            const totalSteps = steps.length
 
             return (
               <div
@@ -181,13 +200,13 @@ export function TaskPanel({ conversationId, refreshKey = 0 }: TaskPanelProps) {
                 </button>
 
                 {/* 展开的步骤列表 */}
-                {isExpanded && task.steps.length > 0 && (
+                {isExpanded && steps.length > 0 && (
                   <div className="border-t border-gray-100 px-3 py-2">
                     <div className="mb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                       执行步骤
                     </div>
                     <div className="space-y-1.5">
-                      {task.steps
+                      {[...steps]
                         .sort((a, b) => a.index - b.index)
                         .map((step) => {
                           const stepStyle = STEP_STATUS_STYLES[step.status] ?? STEP_STATUS_STYLES.pending
@@ -218,7 +237,7 @@ export function TaskPanel({ conversationId, refreshKey = 0 }: TaskPanelProps) {
                 )}
 
                 {/* 展开的描述 */}
-                {isExpanded && !task.steps.length && task.description && (
+                {isExpanded && !steps.length && task.description && (
                   <div className="border-t border-gray-100 px-3 py-2">
                     <p className="text-[10px] leading-4 text-gray-500">
                       {task.description}

@@ -1,10 +1,9 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   canExecute,
   getExecutableSubtasks,
   collectResults,
   type SubtaskRecord,
-  type SubtaskDefinition,
 } from '../subtask-manager'
 
 describe('Subtask Manager', () => {

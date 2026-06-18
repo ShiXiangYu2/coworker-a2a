@@ -11,9 +11,6 @@ class MockAnthropic {
     stream: mockStream,
     create: mockCreate,
   }
-  constructor(_opts?: unknown) {
-    // constructor receives { apiKey }
-  }
 }
 
 vi.mock('@anthropic-ai/sdk', () => ({

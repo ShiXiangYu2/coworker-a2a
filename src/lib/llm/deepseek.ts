@@ -57,6 +57,8 @@ export class DeepSeekLLMProvider implements LLMProvider {
     options: RequestInit,
     isStream = false
   ): Promise<Response> {
+    void isStream
+
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt <= this.retryCount; attempt++) {

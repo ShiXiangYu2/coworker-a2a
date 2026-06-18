@@ -320,7 +320,6 @@ export async function searchMemory(
 
   // 2. 计算相似度
   const queryTokens = tokenize(query)
-  const queryTF = computeTF(queryTokens)
 
   // 构建所有候选文档的 token 列表
   const docTokenLists = candidates.map((entry) => {

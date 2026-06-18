@@ -44,7 +44,12 @@ export async function GET(
       },
     })
 
-    return NextResponse.json({ data: tasks })
+    const data = tasks.map(({ agentSteps, ...task }) => ({
+      ...task,
+      steps: agentSteps,
+    }))
+
+    return NextResponse.json({ data })
   } catch (error) {
     const { message, statusCode } = handleAPIError(error)
     return NextResponse.json({ error: message }, { status: statusCode })

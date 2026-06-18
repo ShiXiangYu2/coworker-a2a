@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 // Mock Prisma
 const mockFindMany = vi.fn()
+const mockSearchMemory = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -11,12 +12,17 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
+vi.mock('@/lib/memory/embedding', () => ({
+  searchMemory: (...args: unknown[]) => mockSearchMemory(...args),
+}))
+
 // Must import after mock
 const { resolveAgentContext } = await import('../context-resolver')
 
 describe('Context Resolver', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSearchMemory.mockResolvedValue([])
   })
 
   it('returns null when conversationId is not provided', async () => {
@@ -28,7 +34,7 @@ describe('Context Resolver', () => {
     mockFindMany.mockResolvedValue([])
     const result = await resolveAgentContext('jobs', 'task-1', 'conv-1')
     expect(result).toBeNull()
-    expect(mockFindMany).toHaveBeenCalledTimes(3)
+    expect(mockFindMany).toHaveBeenCalledTimes(4)
   })
 
   it('assembles completed AgentResults into context', async () => {
@@ -207,5 +213,43 @@ describe('Context Resolver', () => {
     expect(result).not.toBeNull()
     expect(result!.stats.memoryEntries).toBe(1)
     expect(result!.context).toContain('项目规范')
+  })
+  it('excludes current agent semantic memory and falls back to conversation-wide memory', async () => {
+    mockSearchMemory.mockResolvedValueOnce([
+      {
+        entry: {
+          agentId: 'jobs',
+          kind: 'workflow_note',
+          title: 'Self memory',
+          content: 'Current agent memory should not be injected',
+        },
+        score: 0.9,
+      },
+    ])
+
+    mockFindMany
+      .mockResolvedValueOnce([
+        {
+          agentId: 'linus',
+          resultJson: JSON.stringify({ summary: 'Other agent result', findings: [] }),
+          task: { title: 'Shared task context', id: 'task-other' },
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          kind: 'workflow_note',
+          title: 'Other memory',
+          content: 'Conversation memory from another agent',
+        },
+      ])
+
+    const result = await resolveAgentContext('jobs', 'task-1', 'conv-1')
+
+    expect(result).not.toBeNull()
+    expect(result!.context).not.toContain('Self memory')
+    expect(result!.context).not.toContain('Current agent memory should not be injected')
+    expect(result!.context).toContain('Other memory')
   })
 })

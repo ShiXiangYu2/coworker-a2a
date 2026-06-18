@@ -8,9 +8,9 @@ import {
 
 describe('Skill Prompts', () => {
   describe('getAllSkillPrompts', () => {
-    it('should return 20 skill prompts', () => {
+    it('should return 19 skill prompts', () => {
       const skills = getAllSkillPrompts()
-      expect(skills).toHaveLength(20)
+      expect(skills).toHaveLength(19)
     })
 
     it('should have all required fields', () => {
@@ -152,8 +152,8 @@ describe('Skill Prompts', () => {
       const skills = getSkillPromptsForAgent('jobs')
       expect(skills.map((s) => s.name)).toEqual([
         'grill-me',
-        'grill-with-docs',
         'to-prd',
+        'grill-with-docs',
         'prototype',
         'ui-review',
         'knowledge-to-skill',
