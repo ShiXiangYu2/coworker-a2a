@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { EmptyState, LoadingState, PanelShell, StatusBadge } from './ui'
 
 interface EvalRun {
   id: string
@@ -11,19 +12,6 @@ interface EvalRun {
   trigger: string
   checksSummaryJson: string
   createdAt: string
-}
-
-const layerColors: Record<string, string> = {
-  functional: 'bg-blue-100 text-blue-800',
-  performance: 'bg-green-100 text-green-800',
-  boundary: 'bg-yellow-100 text-yellow-800',
-  business: 'bg-purple-100 text-purple-800',
-}
-
-const statusColors: Record<string, string> = {
-  passed: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-  pending: 'bg-gray-100 text-gray-600',
 }
 
 export function EvalPanel() {
@@ -38,7 +26,7 @@ export function EvalPanel() {
         setRuns(data.data ?? [])
       }
     } catch {
-      // silent
+      // Keep this recommendation-only panel non-blocking.
     } finally {
       setLoading(false)
     }
@@ -51,7 +39,6 @@ export function EvalPanel() {
     return () => window.clearTimeout(timeout)
   }, [])
 
-  // 按 targetType 分组
   const grouped = runs.reduce((acc, run) => {
     const key = run.targetType
     if (!acc[key]) acc[key] = []
@@ -60,45 +47,33 @@ export function EvalPanel() {
   }, {} as Record<string, EvalRun[]>)
 
   if (loading) {
-    return (
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <div className="text-sm text-gray-500">正在读取质量评估记录...</div>
-      </div>
-    )
+    return <LoadingState label="正在读取质量评估记录..." />
   }
 
   return (
-    <div className="rounded-lg border bg-white shadow-sm">
-      <div className="border-b px-4 py-3">
-        <h2 className="text-lg font-semibold text-gray-900">质量评估</h2>
-        <p className="text-xs text-gray-500">{runs.length} 条评估记录</p>
-      </div>
-
+    <PanelShell
+      title="质量评估"
+      description={`${runs.length} 条 EvalRun 记录。评估结果只能作为 recommendation / evidence，不能作为执行、发布或部署许可。`}
+    >
       <div className="max-h-96 overflow-y-auto p-4">
         {Object.keys(grouped).length === 0 ? (
-          <div className="py-8 text-center text-sm text-gray-500">
-            暂无质量评估记录
-          </div>
+          <EmptyState title="暂无质量评估记录" description="生成本地 EvalRun 后，这里会按目标类型展示 recommendation-only 评估结果。" />
         ) : (
           <div className="space-y-4">
             {Object.entries(grouped).map(([targetType, evalRuns]) => (
-              <div key={targetType} className="rounded-lg border p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className={`rounded px-2 py-0.5 text-xs font-medium ${layerColors[targetType] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {targetType}
-                  </span>
+              <div key={targetType} className="rounded-lg border border-gray-200 p-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="break-words text-sm font-semibold text-gray-900">{targetType}</span>
                   <span className="text-xs text-gray-500">{evalRuns.length} runs</span>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {evalRuns.slice(0, 5).map((run) => (
-                    <div key={run.id} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusColors[run.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {run.status}
-                        </span>
-                        <span className="text-gray-600">{run.evaluatorId}</span>
+                    <div key={run.id} className="flex flex-col gap-1 rounded bg-gray-50 px-2 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <StatusBadge status={run.status} />
+                        <span className="break-words text-gray-600">{run.evaluatorId}</span>
                       </div>
-                      <span className="text-gray-400">
+                      <span className="shrink-0 text-gray-400">
                         {new Date(run.createdAt).toLocaleDateString()}
                       </span>
                     </div>
@@ -109,6 +84,6 @@ export function EvalPanel() {
           </div>
         )}
       </div>
-    </div>
+    </PanelShell>
   )
 }

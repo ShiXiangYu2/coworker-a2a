@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { EmptyState, ErrorState, LoadingState, PanelShell, RecordMeta, SafetyNote, StatusBadge } from './ui'
 
 interface DepartmentProfile {
   id: string
@@ -117,29 +118,22 @@ export function DepartmentPanel() {
   }
 
   if (loading) {
-    return (
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <div className="animate-pulse text-sm text-gray-500">Loading department records...</div>
-      </div>
-    )
+    return <LoadingState label="正在读取部门画像记录..." />
   }
 
   return (
-    <div className="rounded-lg border bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Department Profiles</h2>
-          <p className="text-xs text-gray-500">
-            Sprint 18 local organization records only. Approval does not route tasks, continue agents, grant runtime permission, or complete tasks.
-          </p>
-        </div>
+    <PanelShell
+      title="Department Profiles"
+      description="Sprint 18 local organization records only. Approval does not route tasks, continue agents, grant runtime permission, or complete tasks."
+      action={
         <button
           onClick={() => setShowCreate(!showCreate)}
           className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
         >
           {showCreate ? 'Cancel' : 'Create Department Profile'}
         </button>
-      </div>
+      }
+    >
 
       {showCreate && (
         <div className="border-b bg-slate-50 px-4 py-3">
@@ -147,7 +141,7 @@ export function DepartmentPanel() {
             <input className="rounded border px-3 py-1.5 text-sm" placeholder="Department name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
             <textarea className="rounded border px-3 py-1.5 text-sm" placeholder="Mission" rows={2} value={mission} onChange={(event) => setMission(event.target.value)} />
             <textarea className="rounded border px-3 py-1.5 text-sm" placeholder="Responsibility summary" rows={3} value={responsibilitySummary} onChange={(event) => setResponsibilitySummary(event.target.value)} />
-            {error && <div className="text-xs text-red-600">{error}</div>}
+            {error && <ErrorState message={error} />}
             <button
               onClick={createProfile}
               disabled={saving || !displayName.trim() || !mission.trim() || !responsibilitySummary.trim()}
@@ -161,7 +155,7 @@ export function DepartmentPanel() {
 
       <div className="max-h-96 overflow-y-auto">
         {records.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-500">No local department profiles yet.</div>
+          <EmptyState title="No local department profiles yet." description="Create or import local department records to review department responsibilities and permission boundaries." />
         ) : (
           <div className="divide-y">
             {records.map((record) => {
@@ -180,12 +174,13 @@ export function DepartmentPanel() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
+                          <StatusBadge status={record.status} />
                           <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{record.profileKind}</span>
                           <span className="text-sm font-medium text-gray-900">{record.displayName}</span>
                         </div>
-                        <div className="mt-1 text-xs text-gray-500">
+                        <RecordMeta>
                           {record.status} | View Department Timeline | {new Date(record.createdAt).toLocaleDateString()}
-                        </div>
+                        </RecordMeta>
                       </div>
                       <span className="text-xs text-slate-700">View Department Profile</span>
                     </div>
@@ -215,7 +210,9 @@ export function DepartmentPanel() {
                           <div className="text-xs text-gray-500">No linked local roles yet.</div>
                         )}
                       </div>
-                      <p className="mt-3 text-xs text-gray-500">{record.safetyNote}</p>
+                      <div className="mt-3">
+                        <SafetyNote>{record.safetyNote || 'Department records are local review references only.'}</SafetyNote>
+                      </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {record.status === 'draft' && (
                           <button className="text-xs text-slate-700" onClick={() => transition(record.id, 'submit-review')}>Submit Department Review</button>
@@ -238,7 +235,6 @@ export function DepartmentPanel() {
           </div>
         )}
       </div>
-    </div>
+    </PanelShell>
   )
 }
-

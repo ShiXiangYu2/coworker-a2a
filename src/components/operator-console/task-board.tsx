@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { EmptyState, LoadingState, PanelShell, StatusBadge } from './ui'
 
 interface Task {
   id: string
@@ -10,14 +11,6 @@ interface Task {
   confidence: number
   createdAt: string
   type: string
-}
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 ring-yellow-200',
-  running: 'bg-blue-100 text-blue-800 ring-blue-200',
-  completed: 'bg-green-100 text-green-800 ring-green-200',
-  blocked: 'bg-red-100 text-red-800 ring-red-200',
-  cancelled: 'bg-gray-100 text-gray-800 ring-gray-200',
 }
 
 const agentLabels: Record<string, string> = {
@@ -42,7 +35,7 @@ export function TaskBoard() {
         setTasks(Array.isArray(data) ? data : [])
       }
     } catch {
-      // silent
+      // Keep the console view resilient when local data is not ready.
     } finally {
       setLoading(false)
     }
@@ -55,29 +48,22 @@ export function TaskBoard() {
     return () => window.clearTimeout(timeout)
   }, [])
 
-  const filtered = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter)
-  const statusCounts = tasks.reduce((acc, t) => {
-    acc[t.status] = (acc[t.status] || 0) + 1
+  const filtered = filter === 'all' ? tasks : tasks.filter((task) => task.status === filter)
+  const statusCounts = tasks.reduce((acc, task) => {
+    acc[task.status] = (acc[task.status] || 0) + 1
     return acc
   }, {} as Record<string, number>)
 
   if (loading) {
-    return (
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <div className="animate-pulse text-sm text-gray-500">Loading tasks...</div>
-      </div>
-    )
+    return <LoadingState label="正在读取本地任务记录..." />
   }
 
   return (
-    <div className="rounded-lg border bg-white shadow-sm">
-      <div className="border-b px-4 py-3">
-        <h2 className="text-lg font-semibold text-gray-900">交付任务</h2>
-        <p className="text-xs text-gray-500">{tasks.length} 条本地任务记录</p>
-      </div>
-
-      {/* Status filter tabs */}
-      <div className="flex gap-2 border-b px-4 py-2">
+    <PanelShell
+      title="本地任务"
+      description={`${tasks.length} 条 Harmony Task 记录。这里展示 Task 状态与建议责任 Agent，不执行自动路由或任务完成。`}
+    >
+      <div className="flex flex-wrap gap-2 border-b border-gray-200 px-4 py-2">
         <button
           onClick={() => setFilter('all')}
           className={`rounded px-3 py-1 text-xs font-medium ring-1 ${
@@ -86,7 +72,7 @@ export function TaskBoard() {
               : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
           }`}
         >
-          All ({tasks.length})
+          全部 ({tasks.length})
         </button>
         {Object.entries(statusCounts).map(([status, count]) => (
           <button
@@ -103,26 +89,21 @@ export function TaskBoard() {
         ))}
       </div>
 
-      {/* Task list */}
       <div className="max-h-96 overflow-y-auto">
         {filtered.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-500">
-            暂无交付任务记录
-          </div>
+          <EmptyState title="暂无任务记录" description="ChatHub 产生本地 Task 后，这里会展示任务状态、建议 Agent 和审计入口。" />
         ) : (
-          <div className="divide-y">
+          <div className="divide-y divide-gray-100">
             {filtered.map((task) => (
               <div key={task.id} className="px-4 py-3 hover:bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`rounded px-2 py-0.5 text-xs font-medium ring-1 ${statusColors[task.status] ?? 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
-                      {task.status}
-                    </span>
-                    <span className="text-sm font-medium text-gray-900">{task.title}</span>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <StatusBadge status={task.status} />
+                    <span className="break-words text-sm font-medium text-gray-900">{task.title}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <div className="flex shrink-0 flex-wrap items-center gap-3 text-xs text-gray-500">
                     {task.targetAgentId && (
-                      <span className="rounded bg-purple-50 px-2 py-0.5 text-purple-700">
+                      <span className="rounded bg-sky-50 px-2 py-0.5 text-sky-700">
                         {agentLabels[task.targetAgentId] ?? task.targetAgentId}
                       </span>
                     )}
@@ -135,6 +116,6 @@ export function TaskBoard() {
           </div>
         )}
       </div>
-    </div>
+    </PanelShell>
   )
 }

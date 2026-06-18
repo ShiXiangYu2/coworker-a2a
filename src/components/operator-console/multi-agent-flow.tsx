@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { EmptyState, LoadingState, PanelShell, StatusBadge } from './ui'
 
 interface Message {
   id: string
@@ -21,10 +22,10 @@ interface FlowStep {
 }
 
 const agentColors: Record<string, string> = {
-  jobs: 'border-blue-300 bg-blue-50',
-  linus: 'border-green-300 bg-green-50',
-  turing: 'border-purple-300 bg-purple-50',
-  bezos: 'border-orange-300 bg-orange-50',
+  jobs: 'border-sky-300 bg-sky-50',
+  linus: 'border-emerald-300 bg-emerald-50',
+  turing: 'border-violet-300 bg-violet-50',
+  bezos: 'border-amber-300 bg-amber-50',
 }
 
 const agentLabels: Record<string, string> = {
@@ -57,14 +58,12 @@ export function MultiAgentFlow() {
 
   const fetchAndParse = useCallback(async () => {
     try {
-      // 获取最近的对话消息，查找包含多 Agent 事件的
       const convRes = await fetch('/api/conversations')
       if (!convRes.ok) return
       const conversations = await convRes.json()
 
       const parsedFlows: { reasoning: string; steps: FlowStep[] }[] = []
 
-      // 只检查最近 5 个对话
       for (const conv of (conversations ?? []).slice(0, 5)) {
         const msgRes = await fetch(`/api/conversations/${conv.id}/messages`)
         if (!msgRes.ok) continue
@@ -72,13 +71,11 @@ export function MultiAgentFlow() {
 
         for (const msg of messages) {
           if (msg.role !== 'assistant') continue
-          // 查找包含 multi-agent 标记的内容
           if (msg.content.includes('Multi-Agent') || msg.content.includes('多 Agent') || msg.content.includes('协作分析')) {
-            // 尝试从内容中提取结构
             const steps = extractSteps(msg.content)
             if (steps.length > 0) {
               parsedFlows.push({
-                reasoning: msg.content.slice(0, 100) + '...',
+                reasoning: `${msg.content.slice(0, 100)}...`,
                 steps,
               })
             }
@@ -88,7 +85,7 @@ export function MultiAgentFlow() {
 
       setFlows(parsedFlows.slice(0, 5))
     } catch {
-      // silent
+      // Derived view only.
     } finally {
       setLoading(false)
     }
@@ -102,40 +99,34 @@ export function MultiAgentFlow() {
   }, [fetchAndParse])
 
   if (loading) {
-    return (
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <div className="animate-pulse text-sm text-gray-500">Loading multi-agent flows...</div>
-      </div>
-    )
+    return <LoadingState label="正在读取多 Agent 协作记录..." />
   }
 
   return (
-    <div className="rounded-lg border bg-white shadow-sm">
-      <div className="border-b px-4 py-3">
-        <h2 className="text-lg font-semibold text-gray-900">协作流</h2>
-        <p className="text-xs text-gray-500">{flows.length} 条最近协作记录</p>
-      </div>
-
+    <PanelShell
+      title="多 Agent 协作流"
+      description={`${flows.length} 条最近协作记录。这里展示已产生的本地消息和分析结果，不启动新的 Agent 协作。`}
+    >
       <div className="max-h-96 overflow-y-auto p-4">
         {flows.length === 0 ? (
-          <div className="py-8 text-center text-sm text-gray-500">
-            No multi-agent flows recorded yet.
-            <br />
-            <span className="text-xs text-gray-400">
-              Try: &quot;帮我分析这个功能的 PRD 和技术方案&quot;
-            </span>
-          </div>
+          <EmptyState
+            title="暂无多 Agent 协作记录"
+            description="在 ChatHub 中产生多 Agent 分析后，这里会展示最近的协作拆解和本地结果。"
+          />
         ) : (
           <div className="space-y-4">
-            {flows.map((flow, idx) => (
-              <div key={idx} className="rounded-lg border p-3">
-                <div className="mb-2 text-xs font-medium text-gray-500">Flow #{idx + 1}</div>
-                <div className="mb-3 text-sm text-gray-700">{flow.reasoning}</div>
+            {flows.map((flow, index) => (
+              <div key={index} className="rounded-lg border border-gray-200 p-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Flow #{index + 1}</span>
+                  <StatusBadge status="review" />
+                </div>
+                <div className="mb-3 break-words text-sm leading-6 text-gray-700">{flow.reasoning}</div>
                 <div className="flex flex-wrap gap-2">
-                  {flow.steps.map((step, sIdx) => (
+                  {flow.steps.map((step, stepIndex) => (
                     <div
-                      key={sIdx}
-                      className={`rounded-lg border-2 px-3 py-2 text-xs ${agentColors[step.agentId ?? ''] ?? 'border-gray-200 bg-gray-50'}`}
+                      key={stepIndex}
+                      className={`min-w-0 rounded-lg border-2 px-3 py-2 text-xs ${agentColors[step.agentId ?? ''] ?? 'border-gray-200 bg-gray-50'}`}
                     >
                       <div className="font-semibold">
                         {agentLabels[step.agentId ?? ''] ?? step.agentName ?? step.agentId}
@@ -151,6 +142,6 @@ export function MultiAgentFlow() {
           </div>
         )}
       </div>
-    </div>
+    </PanelShell>
   )
 }

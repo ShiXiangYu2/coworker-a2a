@@ -12,37 +12,64 @@ import {
   TaskBoard,
 } from '@/components/operator-console'
 
+const closureStages = [
+  'Evidence Sandbox',
+  'Department Profiles',
+  'Evidence Mapping',
+  'Execution Gateway',
+  'Assignment Review',
+]
+
 export default function OperatorConsole() {
   return (
     <main className="min-h-screen bg-gray-100 text-gray-950">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
-          <div>
+      <header className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
             <Link href="/" className="text-sm font-medium text-gray-500 hover:text-gray-900">
-              Back to ChatHub
+              返回 ChatHub
             </Link>
-            <h1 className="mt-2 text-2xl font-semibold text-gray-950">
-              AI 协作交付控制台
+            <h1 className="mt-2 text-2xl font-semibold tracking-normal text-gray-950">
+              Operator Console
             </h1>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-600">
-              从一句用户需求，到一条可审计的交付链。这里展示本地记录、证据、边界和审阅状态，不提供生产动作。
+              v1 本地治理控制台。这里集中展示 Task、Agent、Tool、Workflow、Evidence、Department、
+              Execution Gateway 与 Assignment Review 的本地记录、审计和时间线。
             </p>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-600">
-            <div className="font-semibold text-gray-900">Sprint 16</div>
-            <div>只读 Operator Console MVP</div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+            <div className="font-semibold text-amber-950">v1 safety boundary</div>
+            <div>local-only / human-gated / evidence-only / recommendation-only</div>
           </div>
         </div>
       </header>
 
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
+        <section className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-950">Sprint 1-21 阶段性闭环</h2>
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                所有审批只改变单个本地 record 状态，不会产生真实执行、路由、分配、权限、发布或任务完成效果。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {closureStages.map((stage) => (
+                <span key={stage} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
+                  {stage}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <OperatorOverview />
 
-        <section className="rounded-lg border bg-white p-4 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-gray-950">只读记录明细</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              下方保留现有记录面板，方便从交付链下钻到任务、专家分析、协作流、质量评估和操作证据。
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-950">本地记录工作台</h2>
+            <p className="mt-1 text-sm leading-6 text-gray-600">
+              从任务、分析、审计一路下钻到 Sprint 17-21 的治理记录。所有面板只做本地记录查看、创建和 review lifecycle 管理。
             </p>
           </div>
           <div className="grid gap-4 xl:grid-cols-2">

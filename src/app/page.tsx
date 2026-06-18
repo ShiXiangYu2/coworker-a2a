@@ -1582,21 +1582,21 @@ export default function ChatHub() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* 顶部导航栏 */}
         <header className="border-b bg-white px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <h1 className="text-lg font-semibold text-gray-900">
                 CoWorker+A2A ChatHub
               </h1>
-              <p className="text-xs text-gray-500">
-                Sprint 1 · Mock Provider 默认可用
+              <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500">
+                v1 local governance workspace. ChatHub creates and displays local records; Operator Console reviews evidence, departments, execution gates and assignment records without hidden runtime authorization.
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <a
                 href="/operator"
-                className="rounded-lg bg-indigo-100 px-3 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-200"
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white transition-colors hover:bg-slate-700"
               >
-                ⚙️ Operator Console
+                Operator Console
               </a>
               <button
                 onClick={handleNewConversation}
