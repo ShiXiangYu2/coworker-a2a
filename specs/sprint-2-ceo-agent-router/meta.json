@@ -1,0 +1,14 @@
+{
+  "mission_id": "002",
+  "slug": "sprint-2-ceo-agent-router",
+  "title": "Sprint 2 — CEO Agent Router",
+  "created_at": "2026-06-15T14:00:00+08:00",
+  "status": "planned",
+  "owner": "Kelvin",
+  "source_documents": [
+    "D:\\AI编程\\产品自研\\恒识\\CoWorker-A2A-Production-System.md",
+    "specs/sprint-1-chathub/PRD.md",
+    "specs/sprint-1-chathub/plan.md",
+    "specs/sprint-1-chathub/tasks.md"
+  ]
+}

@@ -1,0 +1,21 @@
+import { updateCollaborationSessionStatus } from '@/lib/collaboration/repository'
+import { collaborationErrorResponse, readOptionalJson, stringValue } from '../../../collaboration/_shared'
+
+interface Params {
+  params: Promise<{ id: string }>
+}
+
+export async function POST(request: Request, { params }: Params) {
+  try {
+    const { id } = await params
+    const body = await readOptionalJson(request)
+    const result = await updateCollaborationSessionStatus(
+      id,
+      'SUBMIT_REVIEW',
+      stringValue(body.decisionReason) ?? stringValue(body.reason) ?? 'CollaborationSession submitted for local review.'
+    )
+    return Response.json({ ok: true, data: result.collaborationSession, auditEvents: result.auditEvents, observabilityEvents: result.observabilityEvents })
+  } catch (error) {
+    return collaborationErrorResponse(error)
+  }
+}

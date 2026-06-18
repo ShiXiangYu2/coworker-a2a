@@ -1,0 +1,3250 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Conversation {
+  id           String   @id @default(cuid())
+  title        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  messages     Message[]
+  tasks        HarmonyTask[]
+  deliverables Deliverable[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  status         String       @default("complete")
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+// ─── Sprint 16: Agent 交付物 ─────────────────────────────
+model Deliverable {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agentId        String
+  agentName      String
+  taskTitle      String
+  type           String   // document | code | analysis | report | plan
+  title          String
+  content        String
+  format         String   // markdown | json | code
+  summary        String
+  confidence     Float
+  metadataJson   String   @default("{}")
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([agentId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("deliverables")
+}
+
+model HarmonyTask {
+  id                        String   @id @default(cuid())
+  idempotencyKey            String?  @unique
+  conversationId            String?
+  conversation              Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  sourceMessageId           String?
+  sourceMessageText         String
+  title                     String
+  description               String
+  type                      String
+  status                    String
+  routeDecisionType         String
+  routeStatus               String
+  targetAgentId             String?
+  confidence                Float
+  reason                    String
+  statusReason              String?
+  matchedSignalsJson        String
+  routeDecisionSnapshotJson String
+  requiresHumanConfirmation Boolean
+  sideEffectsJson           String
+  createdBy                 String
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  runs          HarmonyTaskRun[]
+  steps         HarmonyTaskStep[]
+  auditEvents   HarmonyAuditEvent[]
+  confirmations HarmonyConfirmationArtifact[]
+  agentRuns     AgentRun[]
+  agentSteps    AgentStep[]
+  memoryEntries MemoryEntry[]
+  contextPackets ContextPacket[]
+  a2aMessages   A2AMessage[]
+  toolCalls     ToolCall[]
+  toolRuns      ToolRun[]
+  fileChangeProposals FileChangeProposal[]
+  externalActionProposals ExternalActionProposal[]
+
+  @@index([conversationId])
+  @@index([status])
+  @@index([targetAgentId])
+  @@index([createdAt])
+  @@map("harmony_tasks")
+}
+
+model HarmonyTaskRun {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        HarmonyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  status      String
+  trigger     String
+  attempt     Int
+  runtimeKind String
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps       HarmonyTaskStep[]
+  auditEvents HarmonyAuditEvent[]
+  agentRuns   AgentRun[]
+
+  @@index([taskId])
+  @@index([status])
+  @@map("harmony_task_runs")
+}
+
+model HarmonyTaskStep {
+  id                    String   @id @default(cuid())
+  taskId                String
+  task                  HarmonyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskRunId             String
+  taskRun               HarmonyTaskRun @relation(fields: [taskRunId], references: [id], onDelete: Cascade)
+  index                 Int
+  kind                  String
+  status                String
+  agentId               String?
+  summary               String
+  inputJson             String
+  outputJson            String?
+  confidence            Float?
+  nextRecommendedAction String?
+  sideEffectsJson       String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  auditEvents HarmonyAuditEvent[]
+  agentRun    AgentRun?
+
+  @@index([taskId])
+  @@index([taskRunId])
+  @@index([status])
+  @@map("harmony_task_steps")
+}
+
+model HarmonyAuditEvent {
+  id            String   @id @default(cuid())
+  correlationId String?
+  taskId        String?
+  task          HarmonyTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskRunId     String?
+  taskRun       HarmonyTaskRun? @relation(fields: [taskRunId], references: [id], onDelete: SetNull)
+  taskStepId    String?
+  taskStep      HarmonyTaskStep? @relation(fields: [taskStepId], references: [id], onDelete: SetNull)
+  eventType     String
+  actorType     String
+  actorId       String?
+  beforeStatus  String?
+  afterStatus   String?
+  reason        String
+  payloadJson   String?
+  createdAt     DateTime @default(now())
+
+  @@index([correlationId])
+  @@index([taskId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("harmony_audit_events")
+}
+
+model HarmonyConfirmationArtifact {
+  id                           String   @id @default(cuid())
+  taskId                       String
+  task                         HarmonyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  status                       String
+  action                       String
+  reason                       String
+  requiresHumanOwner           Boolean
+  mustReviewJson               String
+  forbiddenRuntimeActionsJson  String
+  approvedBy                   String?
+  approvedAt                   DateTime?
+  decisionReason               String?
+  expiresAt                    DateTime?
+  payloadJson                  String
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([status])
+  @@map("harmony_confirmation_artifacts")
+}
+
+model AgentRun {
+  id                String   @id @default(cuid())
+  correlationId     String?
+  taskId            String
+  task              HarmonyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskRunId         String?
+  taskRun           HarmonyTaskRun? @relation(fields: [taskRunId], references: [id], onDelete: SetNull)
+  taskStepId        String? @unique
+  taskStep          HarmonyTaskStep? @relation(fields: [taskStepId], references: [id], onDelete: SetNull)
+  contextPacketId   String?
+  agentId           String
+  status            String
+  trigger           String
+  runtimeMode       String
+  attempt           Int
+  idempotencyKey    String? @unique
+  inputSnapshotJson String
+  resultJson        String?
+  errorJson         String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  steps AgentStep[]
+  contextPackets ContextPacket[]
+  memoryEntries MemoryEntry[]
+  a2aMessages A2AMessage[]
+  toolCalls ToolCall[]
+  toolRuns  ToolRun[]
+
+  @@index([correlationId])
+  @@index([taskId])
+  @@index([status])
+  @@index([agentId])
+  @@index([createdAt])
+  @@map("agent_runs")
+}
+
+model AgentStep {
+  id          String   @id @default(cuid())
+  agentRunId  String
+  agentRun    AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  taskId      String
+  task        HarmonyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agentId     String
+  index       Int
+  kind        String
+  status      String
+  summary     String
+  inputJson   String?
+  outputJson  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([agentRunId])
+  @@index([taskId])
+  @@index([status])
+  @@map("agent_steps")
+}
+
+model MemoryEntry {
+  id                         String   @id @default(cuid())
+  idempotencyKey             String?  @unique
+  status                     String
+  title                      String
+  content                    String
+  kind                       String
+  scope                      String
+  projectId                  String?
+  taskId                     String?
+  task                       HarmonyTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  agentRunId                 String?
+  agentRun                   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  agentId                    String?
+  sourceType                 String
+  sourceId                   String?
+  sourceSnapshotJson         String?
+  confidence                 Float
+  tagsJson                   String
+  supersedesMemoryEntryId    String?
+  supersededByMemoryEntryId  String?
+  proposedBy                 String
+  reviewedBy                 String?
+  reviewedAt                 DateTime?
+  rejectionReason            String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([status])
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([agentId])
+  @@index([createdAt])
+  @@map("memory_entries")
+}
+
+model KnowledgeItem {
+  id                            String   @id @default(cuid())
+  idempotencyKey                String?  @unique
+  status                        String
+  title                         String
+  content                       String
+  kind                          String
+  scope                         String
+  projectId                     String?
+  sprint                        String?
+  agentId                       String?
+  sourceType                    String
+  sourcePath                    String?
+  sourceId                      String?
+  sourceSnapshotJson            String?
+  tagsJson                      String
+  version                       Int
+  supersedesKnowledgeItemId     String?
+  supersededByKnowledgeItemId   String?
+  createdBy                     String
+  reviewedBy                    String?
+  reviewedAt                    DateTime?
+  rejectionReason               String?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@index([status])
+  @@index([projectId])
+  @@index([sprint])
+  @@index([agentId])
+  @@index([createdAt])
+  @@map("knowledge_items")
+}
+
+model ContextPacket {
+  id                          String   @id @default(cuid())
+  idempotencyKey              String?  @unique
+  taskId                      String
+  task                        HarmonyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agentRunId                  String?
+  agentRun                    AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  agentId                     String
+  status                      String
+  purpose                     String
+  selectionPolicyJson         String
+  itemsJson                   String
+  excludedItemsJson           String?
+  approxTokens                Int
+  attachedAt                  DateTime?
+  attachedToAgentRunId        String?
+  supersedesContextPacketId   String?
+  supersededByContextPacketId String?
+  createdBy                   String
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([agentId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("context_packets")
+}
+
+model A2AMessage {
+  id                         String   @id @default(cuid())
+  idempotencyKey             String?  @unique
+  status                     String
+  taskId                     String?
+  task                       HarmonyTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  agentRunId                 String?
+  agentRun                   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  fromAgentId                String
+  toAgentId                  String
+  intent                     String
+  subject                    String
+  body                       String
+  payloadJson                String?
+  requiresHumanConfirmation  Boolean
+  reviewedBy                 String?
+  reviewedAt                 DateTime?
+  rejectionReason            String?
+  createdBy                  String
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([status])
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([fromAgentId])
+  @@index([toAgentId])
+  @@index([createdAt])
+  @@map("a2a_messages")
+}
+
+model ToolCall {
+  id                       String   @id @default(cuid())
+  idempotencyKey           String?  @unique
+  correlationId            String?
+  taskId                   String?
+  task                     HarmonyTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  agentRunId               String?
+  agentRun                 AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  agentResultId            String?
+  source                   String
+  toolId                   String
+  toolName                 String
+  proposedByAgentId        String?
+  intent                   String
+  rationale                String
+  inputJson                String
+  inputSummary             String
+  status                   String
+  riskLevel                String
+  sideEffectsJson          String
+  permissionDecisionId     String?
+  confirmationArtifactId   String?
+  sourceSnapshotJson       String?
+  policyInputSnapshotJson  String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  permissions ToolPermission[]
+  runs        ToolRun[]
+
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([toolId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("tool_calls")
+}
+
+model ToolPermission {
+  id                      String   @id @default(cuid())
+  toolCallId              String
+  toolCall                ToolCall @relation(fields: [toolCallId], references: [id], onDelete: Cascade)
+  toolId                  String
+  decision                String
+  reason                  String
+  evaluatedBy             String
+  policyRef               String
+  permissionProfileRef    String
+  riskLevel               String
+  inputValidationStatus   String
+  schemaValidationErrorsJson String
+  matchedRulesJson        String
+  deniedRulesJson         String
+  createdAt               DateTime @default(now())
+
+  @@index([toolCallId])
+  @@index([toolId])
+  @@index([decision])
+  @@index([createdAt])
+  @@map("tool_permissions")
+}
+
+model ToolRun {
+  id                String   @id @default(cuid())
+  idempotencyKey    String?
+  toolCallId        String
+  toolCall          ToolCall @relation(fields: [toolCallId], references: [id], onDelete: Cascade)
+  taskId            String?
+  task              HarmonyTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  agentRunId        String?
+  agentRun          AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  toolId            String
+  status            String
+  mode              String
+  inputSnapshotJson String
+  resultJson        String?
+  executionPlanId   String?
+  executionReceiptId String?
+  executorId        String?
+  sandboxId         String?
+  executionPolicyId String?
+  recoveryPointId   String?
+  sideEffectClass   String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([toolCallId])
+  @@index([idempotencyKey])
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([status])
+  @@index([mode])
+  @@index([executionPlanId])
+  @@index([executionReceiptId])
+  @@map("tool_runs")
+}
+
+model ToolExecutor {
+  id                          String   @id
+  executorVersion             String
+  toolId                      String
+  toolCategory                String
+  executionMode               String
+  enabled                     Boolean
+  sandboxId                   String
+  policyId                    String
+  maxInputSizeChars           Int
+  maxOutputSizeChars          Int
+  timeoutMs                   Int
+  idempotencyRequired         Boolean
+  sideEffectClass             String
+  deterministicOutputRequired Boolean
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@index([toolId])
+  @@index([toolCategory])
+  @@index([enabled])
+  @@map("tool_executors")
+}
+
+model ToolSandbox {
+  id                      String   @id
+  sandboxVersion          String
+  mode                    String
+  allowShell              Boolean
+  allowGit                Boolean
+  allowFileRead           Boolean
+  allowFileWrite          Boolean
+  allowNetwork            Boolean
+  allowExternalApi        Boolean
+  allowMcp                Boolean
+  allowBrowser            Boolean
+  allowDatabaseMigration  Boolean
+  allowEnvironmentRead    Boolean
+  allowQueue              Boolean
+  allowWorker             Boolean
+  maxRuntimeMs            Int
+  maxInputSizeChars       Int
+  maxOutputSizeChars      Int
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([mode])
+  @@map("tool_sandboxes")
+}
+
+model ToolExecutionPolicy {
+  id                                  String   @id
+  policyVersion                       String
+  status                              String
+  defaultDecision                     String
+  allowedToolCategoriesJson           String
+  deniedToolCategoriesJson            String
+  requiresKelvinForRiskJson           String
+  maxRuntimeMs                        Int
+  maxInputSizeChars                   Int
+  maxOutputSizeChars                  Int
+  requireRecoveryPointBeforeExecution Boolean
+  requireAuditEvent                   Boolean
+  requireObservabilityEvent           Boolean
+  requireIdempotencyKey               Boolean
+  requireDeterministicOutput          Boolean
+  allowAutomaticFutureApproval        Boolean
+  allowRetry                          Boolean
+  allowReplay                         Boolean
+  allowRollback                       Boolean
+  allowResumeExecution                Boolean
+  createdAt                           DateTime @default(now())
+  updatedAt                           DateTime @updatedAt
+
+  @@index([status])
+  @@map("tool_execution_policies")
+}
+
+model ToolExecutionPlan {
+  id                            String   @id @default(cuid())
+  toolRunId                     String
+  toolCallId                    String
+  taskId                        String?
+  agentRunId                    String?
+  toolId                        String
+  executorId                    String
+  sandboxId                     String
+  policyId                      String
+  status                        String
+  executionMode                 String
+  sideEffectClass               String
+  expectedSideEffectsJson       String
+  reversibility                 String
+  idempotencyKey                String
+  inputSnapshotJson             String
+  normalizedInputHash           String
+  policyVersion                 String
+  executorVersion               String
+  requiresKelvinConfirmation    Boolean
+  confirmationArtifactId        String?
+  recoveryPointId               String?
+  evalRunIdsJson                String?
+  regressionGateId              String?
+  releaseReadinessChecklistId   String?
+  expiresAt                     DateTime?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@index([toolRunId])
+  @@index([toolCallId])
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("tool_execution_plans")
+}
+
+model ToolExecutionReceipt {
+  id                      String   @id @default(cuid())
+  toolRunId               String
+  toolCallId              String
+  taskId                  String?
+  agentRunId              String?
+  toolId                  String
+  executorId              String
+  executionPlanId         String
+  status                  String
+  startedAt               DateTime
+  completedAt             DateTime
+  durationMs              Int
+  idempotencyKey          String
+  inputHash               String
+  outputHash              String?
+  policyVersion           String
+  executorVersion         String
+  resultSummary           String
+  resultSnapshotJson      String?
+  sideEffectsJson         String
+  sideEffectClass         String
+  reversibility           String
+  simulatedReadsJson      String?
+  auditEventIdsJson       String
+  observabilityEventIdsJson String
+  recoveryPointId         String
+  createdAt               DateTime @default(now())
+
+  @@index([toolRunId])
+  @@index([toolCallId])
+  @@index([executionPlanId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("tool_execution_receipts")
+}
+
+model EvalTarget {
+  id                 String   @id @default(cuid())
+  idempotencyKey     String?  @unique
+  correlationId      String?
+  targetType         String
+  targetId           String
+  routeDecisionId    String?
+  taskId             String?
+  agentRunId         String?
+  agentResultId      String?
+  toolCallId         String?
+  toolPermissionId   String?
+  memoryEntryId      String?
+  knowledgeItemId    String?
+  contextPacketId    String?
+  a2aMessageId       String?
+  source             String
+  snapshotJson       String
+  snapshotVersion    String
+  snapshotHash       String?
+  status             String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([targetType])
+  @@index([targetId])
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([toolCallId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("eval_targets")
+}
+
+model EvalRun {
+  id                      String   @id @default(cuid())
+  evalTargetId            String
+  targetType              String
+  targetId                String
+  evaluatorId             String
+  evaluatorMode           String
+  status                  String
+  trigger                 String
+  checksSummaryJson       String
+  qualityGateDecisionJson String?
+  inputSnapshotJson       String
+  outputSnapshotJson      String?
+  errorJson               String?
+  idempotencyKey          String?  @unique
+  correlationId           String?
+  startedAt               DateTime?
+  completedAt             DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([evalTargetId])
+  @@index([targetType])
+  @@index([targetId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("eval_runs")
+}
+
+model EvalCheck {
+  id             String   @id @default(cuid())
+  evalRunId      String
+  evalTargetId   String
+  checkKey       String
+  title          String
+  category       String
+  status         String
+  severity       String
+  confidence     Float
+  targetPath     String?
+  targetField    String?
+  evidenceJson   String
+  evidenceRefsJson String?
+  recommendation String?
+  createdAt      DateTime @default(now())
+
+  @@index([evalRunId])
+  @@index([evalTargetId])
+  @@index([status])
+  @@index([severity])
+  @@map("eval_checks")
+}
+
+model EvalFinding {
+  id                     String   @id @default(cuid())
+  evalRunId              String
+  evalTargetId           String
+  relatedCheckIdsJson    String
+  severity               String
+  category               String
+  title                  String
+  description            String
+  targetPath             String?
+  targetField            String?
+  evidenceJson           String
+  evidenceRefsJson       String?
+  recommendation         String
+  status                 String
+  needsHumanReview       Boolean
+  confirmationArtifactId String?
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  reviewDecision         String?
+  reviewReason           String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([evalRunId])
+  @@index([evalTargetId])
+  @@index([status])
+  @@index([severity])
+  @@map("eval_findings")
+}
+
+model ObservabilityEvent {
+  id             String   @id @default(cuid())
+  schemaVersion  String
+  correlationId  String
+  resourceType   String
+  resourceId     String
+  eventType      String
+  severity       String
+  message        String
+  source         String
+  attributesJson String?
+  redactionJson  String?
+  createdAt      DateTime @default(now())
+
+  @@index([correlationId])
+  @@index([resourceType, resourceId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("observability_events")
+}
+
+model RunJournal {
+  id                      String   @id @default(cuid())
+  schemaVersion           String
+  runType                 String
+  runId                   String
+  correlationId           String
+  seq                     Int
+  eventRefType            String
+  eventRefId              String
+  eventId                 String?
+  phase                   String?
+  stateBefore             String?
+  stateAfter              String?
+  inputHash               String?
+  outputHash              String?
+  inputSnapshotJson       String?
+  outputSnapshotJson      String?
+  result                  String
+  failureClassificationId String?
+  createdAt               DateTime @default(now())
+
+  @@unique([runType, runId, seq])
+  @@index([correlationId])
+  @@index([runType, runId])
+  @@index([eventRefType, eventRefId])
+  @@index([createdAt])
+  @@map("run_journals")
+}
+
+model RecoveryPoint {
+  id                       String   @id @default(cuid())
+  schemaVersion            String
+  snapshotSchemaVersion    String
+  correlationId            String
+  resourceType             String
+  resourceId               String
+  resourceStatusAtSnapshot String?
+  reason                   String
+  snapshotJson             String?
+  snapshotHash             String?
+  redactionStatus          String
+  redactionJson            String?
+  restorableViewOnly       Boolean
+  canTriggerExecution      Boolean
+  createdBy                String
+  createdAt                DateTime @default(now())
+
+  @@index([correlationId])
+  @@index([resourceType, resourceId])
+  @@index([redactionStatus])
+  @@index([createdAt])
+  @@map("recovery_points")
+}
+
+model ResumeToken {
+  id             String   @id @default(cuid())
+  schemaVersion  String
+  tokenHash      String   @unique
+  correlationId  String
+  resourceType   String
+  resourceId     String
+  mode           String
+  viewContextJson String
+  maxUses        Int?
+  useCount       Int
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  revokedReason  String?
+  createdBy      String
+  lastUsedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([resourceType, resourceId])
+  @@index([mode])
+  @@index([createdAt])
+  @@map("resume_tokens")
+}
+
+model FailureClassification {
+  id              String   @id @default(cuid())
+  schemaVersion   String
+  correlationId   String
+  resourceType    String
+  resourceId      String
+  category        String
+  severity        String
+  retryable       Boolean
+  retryableReason String
+  message         String
+  evidenceJson    String?
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  @@index([correlationId])
+  @@index([resourceType, resourceId])
+  @@index([category])
+  @@index([severity])
+  @@index([createdAt])
+  @@map("failure_classifications")
+}
+
+model CollaborationSession {
+  id                               String   @id @default(cuid())
+  idempotencyKey                   String?  @unique
+  correlationId                    String
+  taskId                           String?
+  sourceA2AMessageId               String?
+  sourceAgentRunId                 String?
+  sourceEvalRunId                  String?
+  teamId                           String?
+  status                           String
+  objective                        String
+  summary                          String?
+  riskLevel                        String
+  requiresHumanConfirmation        Boolean
+  participantsJson                 String
+  planJson                         String
+  confirmationArtifactId           String?
+  supersedesCollaborationSessionId String?
+  supersededByCollaborationSessionId String?
+  createdBy                        String
+  createdAt                        DateTime @default(now())
+  updatedAt                        DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([taskId])
+  @@index([sourceA2AMessageId])
+  @@index([sourceAgentRunId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("collaboration_sessions")
+}
+
+model A2AThread {
+  id                     String   @id @default(cuid())
+  idempotencyKey         String?  @unique
+  correlationId          String
+  collaborationSessionId String
+  taskId                 String?
+  status                 String
+  topic                  String
+  purpose                String
+  participantAgentIdsJson String
+  latestTurnSeq          Int
+  createdBy              String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([collaborationSessionId])
+  @@index([taskId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("a2a_threads")
+}
+
+model A2ATurn {
+  id                     String   @id @default(cuid())
+  idempotencyKey         String?  @unique
+  correlationId          String
+  collaborationSessionId String
+  threadId               String
+  taskId                 String?
+  sourceA2AMessageId     String?
+  sourceAgentRunId       String?
+  seq                    Int
+  speakerAgentId         String
+  audienceAgentIdsJson   String
+  turnType               String
+  status                 String
+  title                  String
+  body                   String
+  inputSnapshotJson      String?
+  outputSnapshotJson     String?
+  riskLevel              String
+  requiresHumanConfirmation Boolean
+  confirmationArtifactId String?
+  createdBy              String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([threadId, seq])
+  @@index([correlationId])
+  @@index([collaborationSessionId])
+  @@index([threadId])
+  @@index([taskId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("a2a_turns")
+}
+
+model HandoffRequest {
+  id                     String   @id @default(cuid())
+  idempotencyKey         String?  @unique
+  correlationId          String
+  collaborationSessionId String
+  threadId               String?
+  taskId                 String?
+  sourceA2AMessageId     String?
+  sourceTurnId           String?
+  fromAgentId            String
+  toAgentId              String
+  status                 String
+  handoffType            String
+  reason                 String
+  requestedScope         String
+  expectedOutput         String
+  contextRefsJson        String
+  riskLevel              String
+  requiresHumanConfirmation Boolean
+  confirmationArtifactId String?
+  createdBy              String
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  rejectionReason        String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([collaborationSessionId])
+  @@index([threadId])
+  @@index([taskId])
+  @@index([status])
+  @@index([fromAgentId])
+  @@index([toAgentId])
+  @@index([createdAt])
+  @@map("handoff_requests")
+}
+
+model CollaborationDecision {
+  id                     String   @id @default(cuid())
+  idempotencyKey         String?  @unique
+  correlationId          String
+  collaborationSessionId String
+  threadId               String?
+  taskId                 String?
+  status                 String
+  decisionType           String
+  title                  String
+  rationale              String
+  recommendation         String
+  decisionInputsJson     String
+  riskLevel              String
+  requiresHumanConfirmation Boolean
+  confirmationArtifactId String?
+  createdBy              String
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  rejectionReason        String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([collaborationSessionId])
+  @@index([threadId])
+  @@index([taskId])
+  @@index([status])
+  @@index([decisionType])
+  @@index([createdAt])
+  @@map("collaboration_decisions")
+}
+
+model FileChangeProposal {
+  id                       String   @id @default(cuid())
+  idempotencyKey           String?  @unique
+  schemaVersion            String
+  correlationId            String
+  taskId                   String?
+  task                     HarmonyTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  agentRunId               String?
+  agentResultId            String?
+  toolRunId                String?
+  toolResultId             String?
+  toolExecutionReceiptId   String?
+  collaborationDecisionId  String?
+  status                   String
+  sourceType               String
+  sourceId                 String?
+  sourceEvidenceRefsJson   String
+  sourceSnapshotJson       String?
+  sourceRedactionStatus    String
+  title                    String
+  summary                  String
+  rationale                String
+  targetFilesJson          String
+  proposedChangeKind       String
+  patchDraftIdsJson        String?
+  gitChangePlanId          String?
+  pullRequestPlanId        String?
+  reviewPatchRecordIdsJson String?
+  riskLevel                String
+  requiresHumanConfirmation Boolean
+  confirmationArtifactId   String?
+  createdBy                String
+  reviewedBy               String?
+  reviewedAt               DateTime?
+  rejectionReason          String?
+  supersedesProposalId     String?
+  canWriteFile             Boolean
+  canRunGit                Boolean
+  canCreatePr              Boolean
+  canDeploy                Boolean
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([toolRunId])
+  @@index([toolExecutionReceiptId])
+  @@index([collaborationDecisionId])
+  @@index([status])
+  @@index([sourceType])
+  @@index([createdAt])
+  @@map("file_change_proposals")
+}
+
+model PatchDraft {
+  id                        String   @id @default(cuid())
+  schemaVersion             String
+  correlationId             String
+  fileChangeProposalId      String
+  status                    String
+  draftType                 String
+  targetPath                String
+  targetPathKind            String
+  language                  String?
+  summary                   String
+  rationale                 String
+  proposedPatch             String
+  patchHash                 String
+  sourceSnippet             String?
+  sourceSnippetHash         String?
+  sourceRedactionStatus     String
+  redactedFieldsJson        String?
+  riskLevel                 String
+  requiresHumanConfirmation Boolean
+  confirmationArtifactId    String?
+  canApply                  Boolean
+  canWriteFile              Boolean
+  canFormat                 Boolean
+  createdBy                 String
+  reviewedBy                String?
+  reviewedAt                DateTime?
+  rejectionReason           String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([fileChangeProposalId])
+  @@index([status])
+  @@index([targetPath])
+  @@index([createdAt])
+  @@map("patch_drafts")
+}
+
+model GitChangePlan {
+  id                        String   @id @default(cuid())
+  schemaVersion             String
+  correlationId             String
+  fileChangeProposalId      String?
+  patchDraftIdsJson         String?
+  sourceEvidenceRefsJson    String
+  sourceRedactionStatus     String
+  status                    String
+  planType                  String
+  title                     String
+  summary                   String
+  rationale                 String
+  proposedBranchName        String?
+  proposedCommitMessage     String?
+  proposedChangedPathsJson  String
+  proposedCommandsText      String?
+  riskLevel                 String
+  requiresHumanConfirmation Boolean
+  confirmationArtifactId    String?
+  canRunGit                 Boolean
+  canCommit                 Boolean
+  canPush                   Boolean
+  canMerge                  Boolean
+  createdBy                 String
+  reviewedBy                String?
+  reviewedAt                DateTime?
+  rejectionReason           String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([fileChangeProposalId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("git_change_plans")
+}
+
+model PullRequestPlan {
+  id                        String   @id @default(cuid())
+  schemaVersion             String
+  correlationId             String
+  fileChangeProposalId      String?
+  gitChangePlanId           String?
+  patchDraftIdsJson         String?
+  sourceEvidenceRefsJson    String
+  sourceRedactionStatus     String
+  status                    String
+  title                     String
+  summary                   String
+  bodyDraft                 String
+  checklistJson             String
+  riskNotesJson             String
+  testPlanJson              String
+  reviewerNotesJson         String?
+  riskLevel                 String
+  requiresHumanConfirmation Boolean
+  confirmationArtifactId    String?
+  canCreatePr               Boolean
+  canPush                   Boolean
+  canMerge                  Boolean
+  canCallExternalApi        Boolean
+  createdBy                 String
+  reviewedBy                String?
+  reviewedAt                DateTime?
+  rejectionReason           String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([fileChangeProposalId])
+  @@index([gitChangePlanId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("pull_request_plans")
+}
+
+model ReviewPatchRecord {
+  id                        String   @id @default(cuid())
+  schemaVersion             String
+  correlationId             String
+  resourceType              String
+  resourceId                String
+  taskId                    String?
+  status                    String
+  reviewerType              String
+  reviewerId                String?
+  verdict                   String
+  summary                   String
+  findingsJson              String
+  requiresHumanConfirmation Boolean
+  confirmationArtifactId    String?
+  canApply                  Boolean
+  canWriteFile              Boolean
+  canRunGit                 Boolean
+  canCreatePr               Boolean
+  canDeploy                 Boolean
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([resourceType, resourceId])
+  @@index([taskId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("review_patch_records")
+}
+
+model ExternalIntegrationProfile {
+  id                     String   @id @default(cuid())
+  schemaVersion          String
+  correlationId          String
+  name                   String
+  providerType           String
+  status                 String
+  endpointMetadataJson   String?
+  authMetadataJson       String
+  allowedRecordActionsJson String
+  forbiddenActionsJson   String
+  riskLevel              String
+  requiresHumanConfirmation Boolean
+  sourceEvidenceRefsJson String?
+  sourceRedactionStatus  String
+  createdBy              String
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  rejectionReason        String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([providerType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("external_integration_profiles")
+}
+
+model McpConnectionProfile {
+  id                           String   @id @default(cuid())
+  schemaVersion                String
+  correlationId                String
+  externalIntegrationProfileId String?
+  name                         String
+  profileMode                  String
+  connectionState              String
+  status                       String
+  serverMetadataJson           String?
+  authMetadataJson             String
+  canConnect                   Boolean
+  canInvokeTool                Boolean
+  canListTools                 Boolean
+  canReadResources             Boolean
+  canWriteResources            Boolean
+  sourceEvidenceRefsJson       String?
+  sourceRedactionStatus        String
+  riskLevel                    String
+  requiresHumanConfirmation    Boolean
+  createdBy                    String
+  reviewedBy                   String?
+  reviewedAt                   DateTime?
+  rejectionReason              String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([externalIntegrationProfileId])
+  @@index([profileMode])
+  @@index([connectionState])
+  @@index([status])
+  @@index([createdAt])
+  @@map("mcp_connection_profiles")
+}
+
+model ExternalActionProposal {
+  id                           String   @id @default(cuid())
+  schemaVersion                String
+  correlationId                String
+  taskId                       String?
+  task                         HarmonyTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  agentRunId                   String?
+  toolRunId                    String?
+  toolExecutionReceiptId       String?
+  collaborationDecisionId      String?
+  fileChangeProposalId         String?
+  pullRequestPlanId            String?
+  externalIntegrationProfileId String?
+  mcpConnectionProfileId       String?
+  sourceKind                   String
+  sourceEvidenceRefsJson       String
+  sourceSnapshotJson           String?
+  sourceRedactionStatus        String
+  status                       String
+  actionCategory               String
+  title                        String
+  summary                      String
+  proposedIntent               String
+  proposedPayloadSummary       String?
+  endpointMetadataRef          String?
+  dataClassification           String
+  riskAssessmentId             String?
+  canCallExternalApi           Boolean
+  canConnectMcp                Boolean
+  canSendNetworkRequest        Boolean
+  canCreateWebhook             Boolean
+  canCreateWorker              Boolean
+  canCreateQueue               Boolean
+  canSendMessage               Boolean
+  canReadExternalData          Boolean
+  canWriteExternalData         Boolean
+  canExecuteToolRun            Boolean
+  canStartAgent                Boolean
+  canCompleteTask              Boolean
+  riskLevel                    String
+  requiresHumanConfirmation    Boolean
+  confirmationArtifactId       String?
+  createdBy                    String
+  reviewedBy                   String?
+  reviewedAt                   DateTime?
+  rejectionReason              String?
+  supersededById               String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([toolRunId])
+  @@index([toolExecutionReceiptId])
+  @@index([collaborationDecisionId])
+  @@index([fileChangeProposalId])
+  @@index([pullRequestPlanId])
+  @@index([status])
+  @@index([sourceKind])
+  @@index([createdAt])
+  @@map("external_action_proposals")
+}
+
+model ExternalActionReviewRecord {
+  id                        String   @id @default(cuid())
+  schemaVersion             String
+  correlationId             String
+  externalActionProposalId  String
+  riskAssessmentId          String?
+  confirmationArtifactId    String?
+  status                    String
+  reviewer                  String
+  verdict                   String
+  rationale                 String
+  requiredFollowUpsJson     String?
+  evidenceRefsJson          String?
+  canExecute                Boolean
+  canCallExternalApi        Boolean
+  canConnectMcp             Boolean
+  canSendMessage            Boolean
+  canCreateWebhook          Boolean
+  canCreateWorker           Boolean
+  canCreateQueue            Boolean
+  canCompleteTask           Boolean
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([externalActionProposalId])
+  @@index([riskAssessmentId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("external_action_review_records")
+}
+
+model IntegrationRiskAssessment {
+  id                 String   @id @default(cuid())
+  schemaVersion      String
+  correlationId      String
+  targetType         String
+  targetId           String
+  status             String
+  riskLevel          String
+  riskFactorsJson    String
+  recommendation     String
+  evidenceRefsJson   String?
+  reviewedBy         String?
+  reviewedAt         DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([targetType, targetId])
+  @@index([status])
+  @@index([riskLevel])
+  @@index([createdAt])
+  @@map("integration_risk_assessments")
+}
+
+model IntegrationAuditPolicy {
+  id                         String   @id
+  policyVersion              String
+  correlationId              String
+  targetSprint               String
+  requiredAuditEventsJson    String
+  requiredObservabilityEventsJson String
+  requiredRedactionChecksJson String
+  forbiddenPayloadFieldsJson String
+  blockedPayloadSurfacesJson String
+  allowRawExternalPayload    Boolean
+  allowSecretsInMetadata     Boolean
+  allowWebhookDispatch       Boolean
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([targetSprint])
+  @@map("integration_audit_policies")
+}
+
+// ─── Sprint 14: Human-Gated Workflow Orchestration Records ─────────────
+// Safety: No WorkflowRun / WorkflowExecution / WorkflowStepExecution models.
+// These are local-record-only models for workflow orchestration proposals.
+
+model WorkflowProposal {
+  id                    String   @id @default(cuid())
+  idempotencyKey        String?  @unique
+  title                 String
+  summary               String
+  status                String
+  sourceKind            String
+  sourceRecordId        String?
+  sourceEvidenceRefsJson String
+  workflowIntent        String
+  riskLevel             String
+  executionCapability   String   @default("none")
+  canExecute            Boolean  @default(false)
+  requiresKelvinConfirmation Boolean @default(true)
+  createdBy             String
+  correlationId         String
+  auditRefsJson         String   @default("[]")
+  archivedAt            DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  steps                 WorkflowStepRecord[]
+  graph                 WorkflowDependencyGraph?
+  assessments           WorkflowReadinessAssessment[]
+  reviews               WorkflowReviewRecord[]
+
+  @@index([correlationId])
+  @@index([status])
+  @@index([sourceKind])
+  @@index([sourceRecordId])
+  @@index([workflowIntent])
+  @@index([createdAt])
+  @@map("workflow_proposals")
+}
+
+model WorkflowStepRecord {
+  id                    String   @id @default(cuid())
+  correlationId         String
+  workflowProposalId    String
+  workflowProposal      WorkflowProposal @relation(fields: [workflowProposalId], references: [id], onDelete: Cascade)
+  stepIndex             Int
+  title                 String
+  summary               String
+  status                String
+  stepKind              String
+  referencedRecordType  String
+  referencedRecordId    String?
+  sourceEvidenceRefsJson String
+  dependsOnStepIdsJson  String   @default("[]")
+  blockedByStepIdsJson  String   @default("[]")
+  executionCapability   String   @default("none")
+  canExecute            Boolean  @default(false)
+  forbiddenExecutionReason String
+  requiresKelvinConfirmation Boolean
+  createdBy             String
+  auditRefsJson         String   @default("[]")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([workflowProposalId])
+  @@index([status])
+  @@index([stepKind])
+  @@index([createdAt])
+  @@map("workflow_step_records")
+}
+
+model WorkflowDependencyGraph {
+  id                    String   @id @default(cuid())
+  workflowProposalId    String   @unique
+  workflowProposal      WorkflowProposal @relation(fields: [workflowProposalId], references: [id], onDelete: Cascade)
+  nodesJson             String
+  edgesJson             String
+  graphIntegrityStatus  String
+  cycleDetected         Boolean
+  missingReferenceCount Int
+  containsExecutableNode Boolean @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([workflowProposalId])
+  @@map("workflow_dependency_graphs")
+}
+
+model WorkflowReviewRecord {
+  id                    String   @id @default(cuid())
+  idempotencyKey        String?  @unique
+  correlationId         String
+  workflowProposalId    String
+  workflowProposal      WorkflowProposal @relation(fields: [workflowProposalId], references: [id], onDelete: Cascade)
+  workflowStepRecordId  String?
+  status                String
+  reviewer              String
+  verdict               String
+  reviewNotes           String
+  confirmationArtifactId String?
+  doesNotExecute        Boolean  @default(true)
+  createdBy             String
+  auditRefsJson         String   @default("[]")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([workflowProposalId])
+  @@index([status])
+  @@index([verdict])
+  @@index([createdAt])
+  @@map("workflow_review_records")
+}
+
+model WorkflowReadinessAssessment {
+  id                    String   @id @default(cuid())
+  idempotencyKey        String?  @unique
+  correlationId         String
+  workflowProposalId    String
+  workflowProposal      WorkflowProposal @relation(fields: [workflowProposalId], references: [id], onDelete: Cascade)
+  status                String
+  riskFindingsJson      String   @default("[]")
+  missingEvidenceJson   String   @default("[]")
+  blockedReasonsJson    String   @default("[]")
+  recommendation        String
+  isExecutionToken      Boolean  @default(false)
+  createdBy             String
+  auditRefsJson         String   @default("[]")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([workflowProposalId])
+  @@index([status])
+  @@index([recommendation])
+  @@index([createdAt])
+  @@map("workflow_readiness_assessments")
+}
+
+// ─── Sprint 15: MVP Closure / System Readiness Records ────────────────
+// Safety: No MVPExecution / ReleaseRun / DeployRun / PublishRun models.
+// These are local readiness, demo, governance summary, and review records only.
+
+model MVPReadinessRecord {
+  id                          String   @id @default(cuid())
+  idempotencyKey              String?  @unique
+  title                       String
+  summary                     String
+  targetVersion               String
+  targetSprint                String   @default("sprint_15")
+  baselineSprintsJson         String
+  status                      String
+  readinessScope              String
+  evidenceRefsJson            String   @default("[]")
+  demoScenarioRefsJson        String   @default("[]")
+  governanceSummaryRefsJson   String   @default("[]")
+  regressionGateRefsJson      String   @default("[]")
+  releaseReadinessRefsJson    String   @default("[]")
+  riskFindingsJson            String   @default("[]")
+  openIssuesJson              String   @default("[]")
+  acceptanceMatrixJson        String   @default("[]")
+  recommendation              String
+  isExecutionToken            Boolean  @default(false)
+  isReleaseToken              Boolean  @default(false)
+  isDeployToken               Boolean  @default(false)
+  requiresKelvinConfirmation  Boolean  @default(true)
+  createdBy                   String
+  reviewedBy                  String?
+  reviewedAt                  DateTime?
+  correlationId               String
+  auditRefsJson               String   @default("[]")
+  archivedAt                  DateTime?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  reviews                     MVPReviewRecord[]
+
+  @@index([correlationId])
+  @@index([targetSprint])
+  @@index([status])
+  @@index([readinessScope])
+  @@index([recommendation])
+  @@index([createdAt])
+  @@map("mvp_readiness_records")
+}
+
+model DemoScenarioRecord {
+  id                       String   @id @default(cuid())
+  idempotencyKey           String?  @unique
+  title                    String
+  summary                  String
+  targetSprint             String   @default("sprint_15")
+  baselineSprintsJson      String
+  status                   String
+  scenarioKind             String
+  entryPoint               String
+  orderedEvidenceRefsJson  String   @default("[]")
+  expectedScreensJson      String   @default("[]")
+  expectedLocalRecordsJson String   @default("[]")
+  forbiddenRuntimeActionsJson String @default("[]")
+  demoScriptMarkdown       String
+  seedDataRefsJson         String   @default("[]")
+  canExecute               Boolean  @default(false)
+  isExecutionToken         Boolean  @default(false)
+  isReleaseToken           Boolean  @default(false)
+  isDeployToken            Boolean  @default(false)
+  createdBy                String
+  correlationId            String
+  auditRefsJson            String   @default("[]")
+  archivedAt               DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  reviews                  MVPReviewRecord[]
+
+  @@index([correlationId])
+  @@index([targetSprint])
+  @@index([status])
+  @@index([scenarioKind])
+  @@index([entryPoint])
+  @@index([createdAt])
+  @@map("demo_scenario_records")
+}
+
+model GovernanceSummaryRecord {
+  id                            String   @id @default(cuid())
+  idempotencyKey                String?  @unique
+  title                         String
+  summary                       String
+  targetSprint                  String   @default("sprint_15")
+  coveredSprintsJson            String
+  status                        String
+  recordCountsByTypeJson        String   @default("{}")
+  safetyBoundarySummary         String
+  defaultDenySummary            String
+  humanConfirmationSummary      String
+  auditCoverageSummary          String
+  observabilityCoverageSummary  String
+  recoveryCoverageSummary       String
+  evalCoverageSummary           String
+  regressionEvidenceRefsJson    String   @default("[]")
+  releaseReadinessRefsJson      String   @default("[]")
+  knownLimitationsJson          String   @default("[]")
+  riskFindingsJson              String   @default("[]")
+  isExecutionToken              Boolean  @default(false)
+  isReleaseToken                Boolean  @default(false)
+  isDeployToken                 Boolean  @default(false)
+  createdBy                     String
+  correlationId                 String
+  auditRefsJson                 String   @default("[]")
+  archivedAt                    DateTime?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  reviews                       MVPReviewRecord[]
+
+  @@index([correlationId])
+  @@index([targetSprint])
+  @@index([status])
+  @@index([createdAt])
+  @@map("governance_summary_records")
+}
+
+model MVPReviewRecord {
+  id                         String   @id @default(cuid())
+  idempotencyKey             String?  @unique
+  targetType                 String
+  targetId                   String
+  targetSprint               String   @default("sprint_15")
+  status                     String
+  reviewer                   String
+  verdict                    String
+  reviewNotes                String
+  confirmationArtifactId     String?
+  doesNotExecute             Boolean  @default(true)
+  doesNotRelease             Boolean  @default(true)
+  doesNotDeploy              Boolean  @default(true)
+  doesNotCompleteTask        Boolean  @default(true)
+  createdBy                  String
+  correlationId              String
+  auditRefsJson              String   @default("[]")
+  archivedAt                 DateTime?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  mvpReadinessRecord         MVPReadinessRecord? @relation(fields: [mvpReadinessRecordId], references: [id], onDelete: Cascade)
+  mvpReadinessRecordId       String?
+  demoScenarioRecord         DemoScenarioRecord? @relation(fields: [demoScenarioRecordId], references: [id], onDelete: Cascade)
+  demoScenarioRecordId       String?
+  governanceSummaryRecord    GovernanceSummaryRecord? @relation(fields: [governanceSummaryRecordId], references: [id], onDelete: Cascade)
+  governanceSummaryRecordId  String?
+
+  @@index([correlationId])
+  @@index([targetType, targetId])
+  @@index([targetSprint])
+  @@index([status])
+  @@index([verdict])
+  @@index([mvpReadinessRecordId])
+  @@index([demoScenarioRecordId])
+  @@index([governanceSummaryRecordId])
+  @@index([createdAt])
+  @@map("mvp_review_records")
+}
+
+model EvidenceItem {
+  id                       String   @id @default(cuid())
+  source                   String
+  sourceId                 String?
+  sourceUrl                String?
+  title                    String
+  content                  String
+  metadataJson             String   @default("{}")
+  contentHash              String
+  contentSize              Int
+  applicableAgentIdsJson   String   @default("[]")
+  applicableTaskTypesJson  String   @default("[]")
+  tagsJson                 String   @default("[]")
+  status                   String   @default("active")
+  importedBy               String   @default("user")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([source])
+  @@index([status])
+  @@index([contentHash])
+  @@index([importedBy])
+  @@index([createdAt])
+  @@map("evidence_items")
+}
+
+model EvidenceSourceProfile {
+  id                      String   @id @default(cuid())
+  targetSprint            String   @default("sprint_17")
+  sourceKind              String
+  displayName             String
+  description             String
+  collectionMode          String   @default("manual_user_provided_only")
+  allowedContentTypesJson String   @default("[]")
+  forbiddenContentTypesJson String @default("[]")
+  metadataFieldsJson      String   @default("[]")
+  mayDereferencePath      Boolean  @default(false)
+  mayReadDirectory        Boolean  @default(false)
+  mayReadClipboard        Boolean  @default(false)
+  mayExecuteCommand       Boolean  @default(false)
+  mayExecuteGit           Boolean  @default(false)
+  mayFetchUrl             Boolean  @default(false)
+  mayCallExternalApi      Boolean  @default(false)
+  mayConnectMcp           Boolean  @default(false)
+  mayReadExternalSystem   Boolean  @default(false)
+  mayWriteExternalSystem  Boolean  @default(false)
+  secretHandling          String   @default("reject_or_redact")
+  evidenceOnly            Boolean  @default(true)
+  createdBy               String   @default("user")
+  correlationId           String
+  auditRefsJson           String   @default("[]")
+  idempotencyKey          String?  @unique
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  importRecords EvidenceImportRecord[]
+
+  @@index([sourceKind])
+  @@index([targetSprint])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("evidence_source_profiles")
+}
+
+model EvidenceRedactionPolicy {
+  id                              String   @id @default(cuid())
+  policyVersion                   String
+  targetSprint                    String   @default("sprint_17")
+  status                          String   @default("active")
+  rejectSecrets                   Boolean  @default(true)
+  redactTokens                    Boolean  @default(true)
+  redactCookies                   Boolean  @default(true)
+  redactCredentials               Boolean  @default(true)
+  redactPrivateKeys               Boolean  @default(true)
+  redactRawHeaders                Boolean  @default(true)
+  redactRawPayloads               Boolean  @default(true)
+  redactPersonalSensitiveData     Boolean  @default(true)
+  allowSummariesOnly              Boolean  @default(true)
+  storeRawInput                   Boolean  @default(false)
+  allowRedactedExcerpt            Boolean  @default(true)
+  maxRedactedExcerptLength        Int      @default(500)
+  allowedSnapshotKindsJson        String   @default("[]")
+  forbiddenPatternsJson           String   @default("[]")
+  requiredReviewForSensitiveFindings Boolean @default(true)
+  auditRequired                   Boolean  @default(true)
+  evidenceOnly                    Boolean  @default(true)
+  createdBy                       String   @default("system_seed")
+  correlationId                   String
+  auditRefsJson                   String   @default("[]")
+  idempotencyKey                  String?  @unique
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  importRecords EvidenceImportRecord[]
+
+  @@index([targetSprint])
+  @@index([status])
+  @@index([policyVersion])
+  @@index([correlationId])
+  @@map("evidence_redaction_policies")
+}
+
+model EvidenceImportRecord {
+  id                         String   @id @default(cuid())
+  title                      String
+  summary                    String
+  targetSprint               String   @default("sprint_17")
+  baseline                   String   @default("sprint_1_15_sealed_mvp_plus_sprint_16_specs_ready")
+  sourceProfileId            String
+  sourceProfile              EvidenceSourceProfile @relation(fields: [sourceProfileId], references: [id])
+  sourceKind                 String
+  status                     String   @default("draft")
+  userProvidedSummary        String
+  rawInputHandling           String   @default("not_stored")
+  importedContentSummary     String
+  redactionPolicyId          String
+  redactionPolicy            EvidenceRedactionPolicy @relation(fields: [redactionPolicyId], references: [id])
+  sanitizedSnapshotRefsJson  String   @default("[]")
+  sourceMetadataJson         String   @default("{}")
+  sourceLimitationsJson      String   @default("[]")
+  riskFindingsJson           String   @default("[]")
+  openIssuesJson             String   @default("[]")
+  evidenceOnly               Boolean  @default(true)
+  isExecutionToken           Boolean  @default(false)
+  isReleaseToken             Boolean  @default(false)
+  isDeployToken              Boolean  @default(false)
+  isExternalAccessToken      Boolean  @default(false)
+  isTaskCompletionToken      Boolean  @default(false)
+  mutatesSourceRecords       Boolean  @default(false)
+  requiresKelvinConfirmation Boolean  @default(true)
+  createdBy                  String   @default("user")
+  reviewedBy                 String?
+  reviewedAt                 DateTime?
+  correlationId              String
+  auditRefsJson              String   @default("[]")
+  idempotencyKey             String?  @unique
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  archivedAt                 DateTime?
+
+  snapshots SanitizedEvidenceSnapshot[]
+  reviews   EvidenceReviewRecord[]
+
+  @@index([targetSprint])
+  @@index([sourceKind])
+  @@index([status])
+  @@index([sourceProfileId])
+  @@index([redactionPolicyId])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("evidence_import_records")
+}
+
+model SanitizedEvidenceSnapshot {
+  id                              String   @id @default(cuid())
+  importRecordId                  String
+  importRecord                    EvidenceImportRecord @relation(fields: [importRecordId], references: [id], onDelete: Cascade)
+  targetSprint                    String   @default("sprint_17")
+  snapshotKind                    String
+  sanitizedTitle                  String
+  sanitizedSummary                String
+  redactedExcerpt                 String?
+  normalizedFactsJson             String   @default("[]")
+  sourceLimitationsJson           String   @default("[]")
+  redactionStatus                 String
+  rejectedSensitiveFindingsJson   String   @default("[]")
+  confidence                      String   @default("medium")
+  mayBeUsedByJson                 String   @default("[]")
+  evidenceOnly                    Boolean  @default(true)
+  isExecutionToken                Boolean  @default(false)
+  isPermissionGrant               Boolean  @default(false)
+  isReleaseToken                  Boolean  @default(false)
+  isDeployToken                   Boolean  @default(false)
+  isExternalAccessToken           Boolean  @default(false)
+  isTaskCompletionToken           Boolean  @default(false)
+  createdBy                       String   @default("system_record")
+  correlationId                   String
+  auditRefsJson                   String   @default("[]")
+  idempotencyKey                  String?  @unique
+  createdAt                       DateTime @default(now())
+
+  reviews EvidenceReviewRecord[]
+
+  @@index([importRecordId])
+  @@index([targetSprint])
+  @@index([snapshotKind])
+  @@index([redactionStatus])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("sanitized_evidence_snapshots")
+}
+
+model EvidenceReviewRecord {
+  id                         String   @id @default(cuid())
+  targetType                 String
+  targetId                   String
+  targetSprint               String   @default("sprint_17")
+  status                     String   @default("draft")
+  reviewer                   String
+  verdict                    String
+  reviewNotes                String
+  confirmationArtifactId     String?
+  evidenceOnly               Boolean  @default(true)
+  doesNotReadFiles           Boolean  @default(true)
+  doesNotRunCommands         Boolean  @default(true)
+  doesNotRunGit              Boolean  @default(true)
+  doesNotFetchUrls           Boolean  @default(true)
+  doesNotCallExternalSystems Boolean  @default(true)
+  doesNotConnectMcp          Boolean  @default(true)
+  doesNotExecute             Boolean  @default(true)
+  doesNotRelease             Boolean  @default(true)
+  doesNotDeploy              Boolean  @default(true)
+  doesNotCompleteTask        Boolean  @default(true)
+  createdBy                  String   @default("user")
+  correlationId              String
+  auditRefsJson              String   @default("[]")
+  idempotencyKey             String?  @unique
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  archivedAt                 DateTime?
+
+  importRecordId String?
+  importRecord   EvidenceImportRecord? @relation(fields: [importRecordId], references: [id], onDelete: Cascade)
+  snapshotId     String?
+  snapshot       SanitizedEvidenceSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([targetSprint])
+  @@index([targetType, targetId])
+  @@index([status])
+  @@index([verdict])
+  @@index([correlationId])
+  @@index([importRecordId])
+  @@index([snapshotId])
+  @@index([createdAt])
+  @@map("evidence_review_records")
+}
+
+// ----- Sprint 18: Department Agent Profiles -----
+// Safety: local organization records only. No Agent router, runtime permission,
+// ToolRun executor, workflow runner, file/Git/PR action, external API, MCP,
+// deploy, release, retry, replay, rollback, restore, or resume model is added.
+
+model DepartmentProfile {
+  id                               String   @id @default(cuid())
+  idempotencyKey                   String?  @unique
+  targetSprint                     String   @default("sprint_18")
+  baseline                         String   @default("sprint_1_17_complete")
+  departmentKey                    String
+  displayName                      String
+  profileKind                      String
+  mission                          String
+  responsibilitySummary            String
+  excludedResponsibilitiesJson     String   @default("[]")
+  status                           String   @default("draft")
+  evidenceRefsJson                 String   @default("[]")
+  roleRefsJson                     String   @default("[]")
+  responsibilityMatrixRefsJson     String   @default("[]")
+  escalationPolicyRefsJson         String   @default("[]")
+  permissionBoundaryRefsJson       String   @default("[]")
+  reviewRecordRefsJson             String   @default("[]")
+  safetyNote                       String
+  isExecutionToken                 Boolean  @default(false)
+  isRoutingToken                   Boolean  @default(false)
+  isPermissionGrant                Boolean  @default(false)
+  isReleaseToken                   Boolean  @default(false)
+  isDeployToken                    Boolean  @default(false)
+  isTaskCompletionToken            Boolean  @default(false)
+  grantsRuntimePermission          Boolean  @default(false)
+  mutatesSourceRecords             Boolean  @default(false)
+  createdBy                        String
+  reviewedBy                       String?
+  reviewedAt                       DateTime?
+  archivedAt                       DateTime?
+  supersedesRecordId               String?
+  supersededByRecordId             String?
+  supersededAt                     DateTime?
+  supersedeReason                  String?
+  correlationId                    String
+  auditRefsJson                    String   @default("[]")
+  createdAt                        DateTime @default(now())
+  updatedAt                        DateTime @updatedAt
+
+  roles                            DepartmentAgentRole[]
+  responsibilityMatrices           DepartmentResponsibilityMatrix[]
+  escalationPolicies               DepartmentEscalationPolicy[]
+  permissionBoundaries             DepartmentPermissionBoundary[]
+  reviewRecords                    DepartmentReviewRecord[]
+
+  @@index([targetSprint])
+  @@index([baseline])
+  @@index([departmentKey])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_profiles")
+}
+
+model DepartmentAgentRole {
+  id                         String   @id @default(cuid())
+  idempotencyKey             String?  @unique
+  targetSprint               String   @default("sprint_18")
+  baseline                   String   @default("sprint_1_17_complete")
+  departmentProfileId        String
+  departmentProfile          DepartmentProfile @relation(fields: [departmentProfileId], references: [id], onDelete: Cascade)
+  roleKey                    String
+  displayName                String
+  roleMission                String
+  seniority                  String
+  status                     String   @default("draft")
+  allowedLocalActionsJson    String   @default("[]")
+  deniedRuntimeActionsJson   String   @default("[]")
+  evidenceRefsJson           String   @default("[]")
+  reviewRecordRefsJson       String   @default("[]")
+  isExecutionToken           Boolean  @default(false)
+  isRoutingToken             Boolean  @default(false)
+  isPermissionGrant          Boolean  @default(false)
+  isReleaseToken             Boolean  @default(false)
+  isDeployToken              Boolean  @default(false)
+  isTaskCompletionToken      Boolean  @default(false)
+  grantsRuntimePermission    Boolean  @default(false)
+  mutatesSourceRecords       Boolean  @default(false)
+  createdBy                  String
+  reviewedBy                 String?
+  reviewedAt                 DateTime?
+  archivedAt                 DateTime?
+  supersedesRecordId         String?
+  supersededByRecordId       String?
+  supersededAt               DateTime?
+  supersedeReason            String?
+  correlationId              String
+  auditRefsJson              String   @default("[]")
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  reviewRecords              DepartmentReviewRecord[]
+
+  @@index([targetSprint])
+  @@index([departmentProfileId])
+  @@index([roleKey])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_agent_roles")
+}
+
+model DepartmentResponsibilityMatrix {
+  id                                String   @id @default(cuid())
+  idempotencyKey                    String?  @unique
+  targetSprint                      String   @default("sprint_18")
+  baseline                          String   @default("sprint_1_17_complete")
+  departmentProfileId               String
+  departmentProfile                 DepartmentProfile @relation(fields: [departmentProfileId], references: [id], onDelete: Cascade)
+  matrixVersion                     String
+  status                            String   @default("draft")
+  ownsJson                          String   @default("[]")
+  supportsJson                      String   @default("[]")
+  consultedJson                     String   @default("[]")
+  forbiddenResponsibilitiesJson     String   @default("[]")
+  evidenceRefsJson                  String   @default("[]")
+  reviewRecordRefsJson              String   @default("[]")
+  isExecutionToken                  Boolean  @default(false)
+  isRoutingToken                    Boolean  @default(false)
+  isPermissionGrant                 Boolean  @default(false)
+  isReleaseToken                    Boolean  @default(false)
+  isDeployToken                     Boolean  @default(false)
+  isTaskCompletionToken             Boolean  @default(false)
+  grantsRuntimePermission           Boolean  @default(false)
+  mutatesSourceRecords              Boolean  @default(false)
+  createdBy                         String
+  reviewedBy                        String?
+  reviewedAt                        DateTime?
+  archivedAt                        DateTime?
+  supersedesRecordId                String?
+  supersededByRecordId              String?
+  supersededAt                      DateTime?
+  supersedeReason                   String?
+  correlationId                     String
+  auditRefsJson                     String   @default("[]")
+  createdAt                         DateTime @default(now())
+  updatedAt                         DateTime @updatedAt
+
+  reviewRecords                     DepartmentReviewRecord[]
+
+  @@index([targetSprint])
+  @@index([departmentProfileId])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_responsibility_matrices")
+}
+
+model DepartmentEscalationPolicy {
+  id                            String   @id @default(cuid())
+  idempotencyKey                String?  @unique
+  targetSprint                  String   @default("sprint_18")
+  baseline                      String   @default("sprint_1_17_complete")
+  departmentProfileId           String
+  departmentProfile             DepartmentProfile @relation(fields: [departmentProfileId], references: [id], onDelete: Cascade)
+  policyVersion                 String
+  status                        String   @default("draft")
+  escalationTriggersJson        String   @default("[]")
+  escalationTargetsJson         String   @default("[]")
+  humanReviewRequired           Boolean  @default(true)
+  automaticEscalationAllowed    Boolean  @default(false)
+  evidenceRefsJson              String   @default("[]")
+  reviewRecordRefsJson          String   @default("[]")
+  isExecutionToken              Boolean  @default(false)
+  isRoutingToken                Boolean  @default(false)
+  isPermissionGrant             Boolean  @default(false)
+  isReleaseToken                Boolean  @default(false)
+  isDeployToken                 Boolean  @default(false)
+  isTaskCompletionToken         Boolean  @default(false)
+  grantsRuntimePermission       Boolean  @default(false)
+  mutatesSourceRecords          Boolean  @default(false)
+  createdBy                     String
+  reviewedBy                    String?
+  reviewedAt                    DateTime?
+  archivedAt                    DateTime?
+  supersedesRecordId            String?
+  supersededByRecordId          String?
+  supersededAt                  DateTime?
+  supersedeReason               String?
+  correlationId                 String
+  auditRefsJson                 String   @default("[]")
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  reviewRecords                 DepartmentReviewRecord[]
+
+  @@index([targetSprint])
+  @@index([departmentProfileId])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_escalation_policies")
+}
+
+model DepartmentPermissionBoundary {
+  id                                      String   @id @default(cuid())
+  idempotencyKey                          String?  @unique
+  targetSprint                            String   @default("sprint_18")
+  baseline                                String   @default("sprint_1_17_complete")
+  departmentProfileId                     String
+  departmentProfile                       DepartmentProfile @relation(fields: [departmentProfileId], references: [id], onDelete: Cascade)
+  boundaryVersion                         String
+  status                                  String   @default("draft")
+  allowedLocalRecordActionsJson           String   @default("[]")
+  deniedRuntimeActionsJson                String   @default("[]")
+  deniedExternalActionsJson               String   @default("[]")
+  deniedFileGitPrActionsJson              String   @default("[]")
+  deniedWorkflowActionsJson               String   @default("[]")
+  deniedTaskActionsJson                   String   @default("[]")
+  approvalMeaning                         String   @default("local_department_record_review_only")
+  approvalDoesNotExecute                  Boolean  @default(true)
+  approvalDoesNotRoute                    Boolean  @default(true)
+  approvalDoesNotGrantFuturePermission    Boolean  @default(true)
+  evidenceRefsJson                        String   @default("[]")
+  reviewRecordRefsJson                    String   @default("[]")
+  isExecutionToken                        Boolean  @default(false)
+  isRoutingToken                          Boolean  @default(false)
+  isPermissionGrant                       Boolean  @default(false)
+  isReleaseToken                          Boolean  @default(false)
+  isDeployToken                           Boolean  @default(false)
+  isTaskCompletionToken                   Boolean  @default(false)
+  grantsRuntimePermission                 Boolean  @default(false)
+  mutatesSourceRecords                    Boolean  @default(false)
+  createdBy                               String
+  reviewedBy                              String?
+  reviewedAt                              DateTime?
+  archivedAt                              DateTime?
+  supersedesRecordId                      String?
+  supersededByRecordId                    String?
+  supersededAt                            DateTime?
+  supersedeReason                         String?
+  correlationId                           String
+  auditRefsJson                           String   @default("[]")
+  createdAt                               DateTime @default(now())
+  updatedAt                               DateTime @updatedAt
+
+  reviewRecords                           DepartmentReviewRecord[]
+
+  @@index([targetSprint])
+  @@index([departmentProfileId])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_permission_boundaries")
+}
+
+model DepartmentReviewRecord {
+  id                                String   @id @default(cuid())
+  idempotencyKey                    String?  @unique
+  targetSprint                      String   @default("sprint_18")
+  baseline                          String   @default("sprint_1_17_complete")
+  targetType                        String
+  targetId                          String
+  status                            String   @default("draft")
+  reviewer                          String
+  verdict                           String
+  reviewNotes                       String
+  confirmationArtifactId            String?
+  evidenceRefsJson                  String   @default("[]")
+  doesNotExecuteAgent               Boolean  @default(true)
+  doesNotContinueAgent              Boolean  @default(true)
+  doesNotExecuteToolRun             Boolean  @default(true)
+  doesNotExecuteWorkflow            Boolean  @default(true)
+  doesNotWriteFile                  Boolean  @default(true)
+  doesNotRunGit                     Boolean  @default(true)
+  doesNotCallExternalApi            Boolean  @default(true)
+  doesNotConnectMcp                 Boolean  @default(true)
+  doesNotCreatePr                   Boolean  @default(true)
+  doesNotDeployReleasePublish       Boolean  @default(true)
+  doesNotCompleteTask               Boolean  @default(true)
+  doesNotApproveFutureRecords       Boolean  @default(true)
+  isExecutionToken                  Boolean  @default(false)
+  isRoutingToken                    Boolean  @default(false)
+  isPermissionGrant                 Boolean  @default(false)
+  isReleaseToken                    Boolean  @default(false)
+  isDeployToken                     Boolean  @default(false)
+  isTaskCompletionToken             Boolean  @default(false)
+  grantsRuntimePermission           Boolean  @default(false)
+  mutatesSourceRecords              Boolean  @default(false)
+  createdBy                         String
+  reviewedBy                        String?
+  reviewedAt                        DateTime?
+  archivedAt                        DateTime?
+  supersedesRecordId                String?
+  supersededByRecordId              String?
+  supersededAt                      DateTime?
+  supersedeReason                   String?
+  correlationId                     String
+  auditRefsJson                     String   @default("[]")
+  createdAt                         DateTime @default(now())
+  updatedAt                         DateTime @updatedAt
+
+  departmentProfileId               String?
+  departmentProfile                 DepartmentProfile? @relation(fields: [departmentProfileId], references: [id], onDelete: Cascade)
+  departmentAgentRoleId             String?
+  departmentAgentRole               DepartmentAgentRole? @relation(fields: [departmentAgentRoleId], references: [id], onDelete: Cascade)
+  departmentResponsibilityMatrixId  String?
+  departmentResponsibilityMatrix    DepartmentResponsibilityMatrix? @relation(fields: [departmentResponsibilityMatrixId], references: [id], onDelete: Cascade)
+  departmentEscalationPolicyId      String?
+  departmentEscalationPolicy        DepartmentEscalationPolicy? @relation(fields: [departmentEscalationPolicyId], references: [id], onDelete: Cascade)
+  departmentPermissionBoundaryId    String?
+  departmentPermissionBoundary      DepartmentPermissionBoundary? @relation(fields: [departmentPermissionBoundaryId], references: [id], onDelete: Cascade)
+
+  @@index([targetSprint])
+  @@index([targetType, targetId])
+  @@index([status])
+  @@index([verdict])
+  @@index([correlationId])
+  @@index([departmentProfileId])
+  @@index([departmentAgentRoleId])
+  @@index([departmentResponsibilityMatrixId])
+  @@index([departmentEscalationPolicyId])
+  @@index([departmentPermissionBoundaryId])
+  @@index([createdAt])
+  @@map("department_review_records")
+}
+
+model EvidenceToDepartmentMappingRecord {
+  id                               String   @id @default(cuid())
+  idempotencyKey                   String?  @unique
+  targetSprint                     String   @default("sprint_19")
+  baseline                         String   @default("sprint_1_18_complete")
+  mappingKey                       String
+  title                            String
+  description                      String
+  status                           String   @default("draft")
+  evidenceRecordType               String
+  evidenceRecordId                 String
+  evidenceSummary                  String
+  departmentRecordType             String
+  departmentRecordId               String
+  departmentProfileId              String?
+  mappingStrength                  String   @default("supporting")
+  mappingRationale                 String
+  riskNotesJson                    String   @default("[]")
+  coverageRecordRefsJson           String   @default("[]")
+  gapRecordRefsJson                String   @default("[]")
+  reviewRecordRefsJson             String   @default("[]")
+  auditRefsJson                    String   @default("[]")
+  isExecutionToken                 Boolean  @default(false)
+  isRoutingToken                   Boolean  @default(false)
+  isPermissionGrant                Boolean  @default(false)
+  isReleaseToken                   Boolean  @default(false)
+  isDeployToken                    Boolean  @default(false)
+  isTaskCompletionToken            Boolean  @default(false)
+  grantsRuntimePermission          Boolean  @default(false)
+  mutatesSourceRecords             Boolean  @default(false)
+  importsLiveEvidence              Boolean  @default(false)
+  syncsEvidence                    Boolean  @default(false)
+  triggersAgentRouting             Boolean  @default(false)
+  triggersTaskAssignment           Boolean  @default(false)
+  createdBy                        String
+  reviewedBy                       String?
+  reviewedAt                       DateTime?
+  archivedAt                       DateTime?
+  supersedesRecordId               String?
+  supersededByRecordId             String?
+  supersededAt                     DateTime?
+  supersedeReason                  String?
+  correlationId                    String
+  createdAt                        DateTime @default(now())
+  updatedAt                        DateTime @updatedAt
+
+  coverageRecords                  DepartmentEvidenceCoverageRecord[]
+  gapRecords                       DepartmentReviewGapRecord[]
+  reviewRecords                    DepartmentMappingReviewRecord[]
+
+  @@index([targetSprint])
+  @@index([baseline])
+  @@index([status])
+  @@index([mappingKey])
+  @@index([evidenceRecordType, evidenceRecordId])
+  @@index([departmentRecordType, departmentRecordId])
+  @@index([departmentProfileId])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("evidence_to_department_mapping_records")
+}
+
+model DepartmentEvidenceCoverageRecord {
+  id                               String   @id @default(cuid())
+  idempotencyKey                   String?  @unique
+  targetSprint                     String   @default("sprint_19")
+  baseline                         String   @default("sprint_1_18_complete")
+  mappingRecordId                  String?
+  mappingRecord                    EvidenceToDepartmentMappingRecord? @relation(fields: [mappingRecordId], references: [id], onDelete: Cascade)
+  departmentProfileId              String
+  departmentRecordType             String
+  departmentRecordId               String
+  coverageScope                    String
+  coverageLevel                    String   @default("partial")
+  coverageSummary                  String
+  supportingMappingRefsJson        String   @default("[]")
+  missingEvidenceNotesJson         String   @default("[]")
+  recommendationOnly               Boolean  @default(true)
+  status                           String   @default("draft")
+  reviewRecordRefsJson             String   @default("[]")
+  auditRefsJson                    String   @default("[]")
+  isExecutionToken                 Boolean  @default(false)
+  isRoutingToken                   Boolean  @default(false)
+  isPermissionGrant                Boolean  @default(false)
+  isReleaseToken                   Boolean  @default(false)
+  isDeployToken                    Boolean  @default(false)
+  isTaskCompletionToken            Boolean  @default(false)
+  grantsRuntimePermission          Boolean  @default(false)
+  mutatesSourceRecords             Boolean  @default(false)
+  importsLiveEvidence              Boolean  @default(false)
+  syncsEvidence                    Boolean  @default(false)
+  triggersAgentRouting             Boolean  @default(false)
+  triggersTaskAssignment           Boolean  @default(false)
+  createdBy                        String
+  reviewedBy                       String?
+  reviewedAt                       DateTime?
+  archivedAt                       DateTime?
+  supersedesRecordId               String?
+  supersededByRecordId             String?
+  supersededAt                     DateTime?
+  supersedeReason                  String?
+  correlationId                    String
+  createdAt                        DateTime @default(now())
+  updatedAt                        DateTime @updatedAt
+
+  reviewRecords                    DepartmentMappingReviewRecord[]
+
+  @@index([targetSprint])
+  @@index([departmentProfileId])
+  @@index([departmentRecordType, departmentRecordId])
+  @@index([status])
+  @@index([coverageLevel])
+  @@index([mappingRecordId])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_evidence_coverage_records")
+}
+
+model DepartmentReviewGapRecord {
+  id                               String   @id @default(cuid())
+  idempotencyKey                   String?  @unique
+  targetSprint                     String   @default("sprint_19")
+  baseline                         String   @default("sprint_1_18_complete")
+  mappingRecordId                  String?
+  mappingRecord                    EvidenceToDepartmentMappingRecord? @relation(fields: [mappingRecordId], references: [id], onDelete: Cascade)
+  departmentProfileId              String
+  departmentRecordType             String
+  departmentRecordId               String
+  gapType                          String
+  gapSummary                       String
+  riskLevel                        String   @default("medium")
+  recommendedEvidenceJson          String   @default("[]")
+  recommendationOnly               Boolean  @default(true)
+  status                           String   @default("draft")
+  reviewRecordRefsJson             String   @default("[]")
+  auditRefsJson                    String   @default("[]")
+  isExecutionToken                 Boolean  @default(false)
+  isRoutingToken                   Boolean  @default(false)
+  isPermissionGrant                Boolean  @default(false)
+  isReleaseToken                   Boolean  @default(false)
+  isDeployToken                    Boolean  @default(false)
+  isTaskCompletionToken            Boolean  @default(false)
+  grantsRuntimePermission          Boolean  @default(false)
+  mutatesSourceRecords             Boolean  @default(false)
+  importsLiveEvidence              Boolean  @default(false)
+  syncsEvidence                    Boolean  @default(false)
+  triggersAgentRouting             Boolean  @default(false)
+  triggersTaskAssignment           Boolean  @default(false)
+  createdBy                        String
+  reviewedBy                       String?
+  reviewedAt                       DateTime?
+  archivedAt                       DateTime?
+  supersedesRecordId               String?
+  supersededByRecordId             String?
+  supersededAt                     DateTime?
+  supersedeReason                  String?
+  correlationId                    String
+  createdAt                        DateTime @default(now())
+  updatedAt                        DateTime @updatedAt
+
+  reviewRecords                    DepartmentMappingReviewRecord[]
+
+  @@index([targetSprint])
+  @@index([departmentProfileId])
+  @@index([departmentRecordType, departmentRecordId])
+  @@index([status])
+  @@index([gapType])
+  @@index([riskLevel])
+  @@index([mappingRecordId])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_review_gap_records")
+}
+
+model DepartmentMappingReviewRecord {
+  id                               String   @id @default(cuid())
+  idempotencyKey                   String?  @unique
+  targetSprint                     String   @default("sprint_19")
+  baseline                         String   @default("sprint_1_18_complete")
+  targetType                       String
+  targetId                         String
+  status                           String   @default("draft")
+  reviewer                         String   @default("kelvin")
+  verdict                          String
+  reviewNotes                      String
+  confirmationArtifactId           String?
+  evidenceRefsJson                 String   @default("[]")
+  doesNotExecuteAgent              Boolean  @default(true)
+  doesNotContinueAgent             Boolean  @default(true)
+  doesNotAutoRouteTask             Boolean  @default(true)
+  doesNotAssignAgent               Boolean  @default(true)
+  doesNotExecuteToolRun            Boolean  @default(true)
+  doesNotExecuteWorkflow           Boolean  @default(true)
+  doesNotWriteFile                 Boolean  @default(true)
+  doesNotRunGit                    Boolean  @default(true)
+  doesNotCallExternalApi           Boolean  @default(true)
+  doesNotConnectMcp                Boolean  @default(true)
+  doesNotCreatePr                  Boolean  @default(true)
+  doesNotDeployReleasePublish      Boolean  @default(true)
+  doesNotCompleteTask              Boolean  @default(true)
+  doesNotApproveFutureMappings     Boolean  @default(true)
+  statusChangeOnly                 Boolean  @default(true)
+  reviewRecordRefsJson             String   @default("[]")
+  auditRefsJson                    String   @default("[]")
+  isExecutionToken                 Boolean  @default(false)
+  isRoutingToken                   Boolean  @default(false)
+  isPermissionGrant                Boolean  @default(false)
+  isReleaseToken                   Boolean  @default(false)
+  isDeployToken                    Boolean  @default(false)
+  isTaskCompletionToken            Boolean  @default(false)
+  grantsRuntimePermission          Boolean  @default(false)
+  mutatesSourceRecords             Boolean  @default(false)
+  importsLiveEvidence              Boolean  @default(false)
+  syncsEvidence                    Boolean  @default(false)
+  triggersAgentRouting             Boolean  @default(false)
+  triggersTaskAssignment           Boolean  @default(false)
+  createdBy                        String
+  reviewedBy                       String?
+  reviewedAt                       DateTime?
+  archivedAt                       DateTime?
+  supersedesRecordId               String?
+  supersededByRecordId             String?
+  supersededAt                     DateTime?
+  supersedeReason                  String?
+  correlationId                    String
+  createdAt                        DateTime @default(now())
+  updatedAt                        DateTime @updatedAt
+
+  mappingRecordId                  String?
+  mappingRecord                    EvidenceToDepartmentMappingRecord? @relation(fields: [mappingRecordId], references: [id], onDelete: Cascade)
+  coverageRecordId                 String?
+  coverageRecord                   DepartmentEvidenceCoverageRecord? @relation(fields: [coverageRecordId], references: [id], onDelete: Cascade)
+  gapRecordId                      String?
+  gapRecord                        DepartmentReviewGapRecord? @relation(fields: [gapRecordId], references: [id], onDelete: Cascade)
+
+  @@index([targetSprint])
+  @@index([targetType, targetId])
+  @@index([status])
+  @@index([verdict])
+  @@index([mappingRecordId])
+  @@index([coverageRecordId])
+  @@index([gapRecordId])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_mapping_review_records")
+}
+
+model ExecutionIntentRecord {
+  id                         String   @id @default(cuid())
+  idempotencyKey             String?  @unique
+  targetSprint               String   @default("sprint_20")
+  baseline                   String   @default("sprint_1_19_complete")
+  status                     String   @default("draft")
+  intentTitle                String
+  intentSummary              String
+  requestedBy                String   @default("operator")
+  departmentProfileId        String?
+  departmentAgentRoleId      String?
+  sourceTaskId               String?
+  requestedActionType        String
+  requestedActionSummary     String
+  expectedOutcome            String
+  riskSummary                String
+  sanitizedEvidenceRefsJson  String   @default("[]")
+  departmentMappingRefsJson  String   @default("[]")
+  planRecordRefsJson         String   @default("[]")
+  gateRecordRefsJson         String   @default("[]")
+  approvalRecordRefsJson     String   @default("[]")
+  receiptRecordRefsJson      String   @default("[]")
+  auditRefsJson              String   @default("[]")
+  isExecutionToken           Boolean  @default(false)
+  isRoutingToken             Boolean  @default(false)
+  isPermissionGrant          Boolean  @default(false)
+  isReleaseToken             Boolean  @default(false)
+  isDeployToken              Boolean  @default(false)
+  isTaskCompletionToken      Boolean  @default(false)
+  grantsRuntimePermission    Boolean  @default(false)
+  mutatesSourceRecords       Boolean  @default(false)
+  executesAgent              Boolean  @default(false)
+  continuesAgent             Boolean  @default(false)
+  routesTask                 Boolean  @default(false)
+  assignsAgent               Boolean  @default(false)
+  executesToolRun            Boolean  @default(false)
+  executesWorkflow           Boolean  @default(false)
+  writesFile                 Boolean  @default(false)
+  runsGit                    Boolean  @default(false)
+  callsExternalApi           Boolean  @default(false)
+  connectsMcp                Boolean  @default(false)
+  createsPr                  Boolean  @default(false)
+  deploysOrReleases          Boolean  @default(false)
+  completesTask              Boolean  @default(false)
+  createdBy                  String
+  reviewedBy                 String?
+  reviewedAt                 DateTime?
+  archivedAt                 DateTime?
+  supersedesRecordId         String?
+  supersededByRecordId       String?
+  supersededAt               DateTime?
+  supersedeReason            String?
+  correlationId              String
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  plans                      ExecutionPlanRecord[]
+  gates                      ExecutionGateRecord[]
+  receipts                   ExecutionReceiptRecord[]
+
+  @@index([targetSprint])
+  @@index([baseline])
+  @@index([status])
+  @@index([departmentProfileId])
+  @@index([departmentAgentRoleId])
+  @@index([sourceTaskId])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("execution_intent_records")
+}
+
+model ExecutionPlanRecord {
+  id                         String   @id @default(cuid())
+  idempotencyKey             String?  @unique
+  targetSprint               String   @default("sprint_20")
+  baseline                   String   @default("sprint_1_19_complete")
+  intentRecordId             String
+  intentRecord               ExecutionIntentRecord @relation(fields: [intentRecordId], references: [id], onDelete: Cascade)
+  status                     String   @default("draft")
+  planTitle                  String
+  planSummary                String
+  plannedStepsJson           String   @default("[]")
+  preconditionsJson          String   @default("[]")
+  postconditionsJson         String   @default("[]")
+  humanCheckpointsJson       String   @default("[]")
+  riskControlsJson           String   @default("[]")
+  rollbackNotes              String
+  nonExecutablePlanOnly      Boolean  @default(true)
+  sanitizedEvidenceRefsJson  String   @default("[]")
+  gateRecordRefsJson         String   @default("[]")
+  approvalRecordRefsJson     String   @default("[]")
+  receiptRecordRefsJson      String   @default("[]")
+  auditRefsJson              String   @default("[]")
+  isExecutionToken           Boolean  @default(false)
+  isRoutingToken             Boolean  @default(false)
+  isPermissionGrant          Boolean  @default(false)
+  isReleaseToken             Boolean  @default(false)
+  isDeployToken              Boolean  @default(false)
+  isTaskCompletionToken      Boolean  @default(false)
+  grantsRuntimePermission    Boolean  @default(false)
+  mutatesSourceRecords       Boolean  @default(false)
+  executesAgent              Boolean  @default(false)
+  continuesAgent             Boolean  @default(false)
+  routesTask                 Boolean  @default(false)
+  assignsAgent               Boolean  @default(false)
+  executesToolRun            Boolean  @default(false)
+  executesWorkflow           Boolean  @default(false)
+  writesFile                 Boolean  @default(false)
+  runsGit                    Boolean  @default(false)
+  callsExternalApi           Boolean  @default(false)
+  connectsMcp                Boolean  @default(false)
+  createsPr                  Boolean  @default(false)
+  deploysOrReleases          Boolean  @default(false)
+  completesTask              Boolean  @default(false)
+  createdBy                  String
+  reviewedBy                 String?
+  reviewedAt                 DateTime?
+  archivedAt                 DateTime?
+  supersedesRecordId         String?
+  supersededByRecordId       String?
+  supersededAt               DateTime?
+  supersedeReason            String?
+  correlationId              String
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  gates                      ExecutionGateRecord[]
+  receipts                   ExecutionReceiptRecord[]
+
+  @@index([targetSprint])
+  @@index([intentRecordId])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("execution_plan_records")
+}
+
+model ExecutionGateRecord {
+  id                                  String   @id @default(cuid())
+  idempotencyKey                      String?  @unique
+  targetSprint                        String   @default("sprint_20")
+  baseline                            String   @default("sprint_1_19_complete")
+  intentRecordId                      String?
+  intentRecord                        ExecutionIntentRecord? @relation(fields: [intentRecordId], references: [id], onDelete: Cascade)
+  planRecordId                        String?
+  planRecord                          ExecutionPlanRecord? @relation(fields: [planRecordId], references: [id], onDelete: Cascade)
+  status                              String   @default("draft")
+  gateName                            String
+  gateSummary                         String
+  gateDecision                        String   @default("pending_review")
+  requiredReviewer                    String   @default("kelvin")
+  requiredEvidenceRefsJson            String   @default("[]")
+  blockedReasonsJson                  String   @default("[]")
+  approvalMeaning                     String   @default("local_execution_record_review_only")
+  doesNotGrantRuntimePermission       Boolean  @default(true)
+  approvalRecordRefsJson              String   @default("[]")
+  receiptRecordRefsJson               String   @default("[]")
+  auditRefsJson                       String   @default("[]")
+  isExecutionToken                    Boolean  @default(false)
+  isRoutingToken                      Boolean  @default(false)
+  isPermissionGrant                   Boolean  @default(false)
+  isReleaseToken                      Boolean  @default(false)
+  isDeployToken                       Boolean  @default(false)
+  isTaskCompletionToken               Boolean  @default(false)
+  grantsRuntimePermission             Boolean  @default(false)
+  mutatesSourceRecords                Boolean  @default(false)
+  executesAgent                       Boolean  @default(false)
+  continuesAgent                      Boolean  @default(false)
+  routesTask                          Boolean  @default(false)
+  assignsAgent                        Boolean  @default(false)
+  executesToolRun                     Boolean  @default(false)
+  executesWorkflow                    Boolean  @default(false)
+  writesFile                          Boolean  @default(false)
+  runsGit                             Boolean  @default(false)
+  callsExternalApi                    Boolean  @default(false)
+  connectsMcp                         Boolean  @default(false)
+  createsPr                           Boolean  @default(false)
+  deploysOrReleases                   Boolean  @default(false)
+  completesTask                       Boolean  @default(false)
+  createdBy                           String
+  reviewedBy                          String?
+  reviewedAt                          DateTime?
+  archivedAt                          DateTime?
+  supersedesRecordId                  String?
+  supersededByRecordId                String?
+  supersededAt                        DateTime?
+  supersedeReason                     String?
+  correlationId                       String
+  createdAt                           DateTime @default(now())
+  updatedAt                           DateTime @updatedAt
+
+  receipts                            ExecutionReceiptRecord[]
+
+  @@index([targetSprint])
+  @@index([intentRecordId])
+  @@index([planRecordId])
+  @@index([status])
+  @@index([gateDecision])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("execution_gate_records")
+}
+
+model ExecutionApprovalRecord {
+  id                                  String   @id @default(cuid())
+  idempotencyKey                      String?  @unique
+  targetSprint                        String   @default("sprint_20")
+  baseline                            String   @default("sprint_1_19_complete")
+  targetType                          String
+  targetId                            String
+  status                              String   @default("draft")
+  reviewer                            String   @default("kelvin")
+  verdict                             String
+  reviewNotes                         String
+  confirmationArtifactId              String?
+  approvalScope                       String   @default("single_local_record_only")
+  doesNotExecuteAgent                 Boolean  @default(true)
+  doesNotContinueAgent                Boolean  @default(true)
+  doesNotAutoRouteTask                Boolean  @default(true)
+  doesNotAssignAgent                  Boolean  @default(true)
+  doesNotExecuteToolRun               Boolean  @default(true)
+  doesNotExecuteWorkflow              Boolean  @default(true)
+  doesNotWriteFile                    Boolean  @default(true)
+  doesNotRunGit                       Boolean  @default(true)
+  doesNotCallExternalApi              Boolean  @default(true)
+  doesNotConnectMcp                   Boolean  @default(true)
+  doesNotCreatePr                     Boolean  @default(true)
+  doesNotDeployReleasePublish         Boolean  @default(true)
+  doesNotCompleteTask                 Boolean  @default(true)
+  doesNotApproveFutureExecutions      Boolean  @default(true)
+  evidenceRefsJson                    String   @default("[]")
+  auditRefsJson                       String   @default("[]")
+  isExecutionToken                    Boolean  @default(false)
+  isRoutingToken                      Boolean  @default(false)
+  isPermissionGrant                   Boolean  @default(false)
+  isReleaseToken                      Boolean  @default(false)
+  isDeployToken                       Boolean  @default(false)
+  isTaskCompletionToken               Boolean  @default(false)
+  grantsRuntimePermission             Boolean  @default(false)
+  mutatesSourceRecords                Boolean  @default(false)
+  executesAgent                       Boolean  @default(false)
+  continuesAgent                      Boolean  @default(false)
+  routesTask                          Boolean  @default(false)
+  assignsAgent                        Boolean  @default(false)
+  executesToolRun                     Boolean  @default(false)
+  executesWorkflow                    Boolean  @default(false)
+  writesFile                          Boolean  @default(false)
+  runsGit                             Boolean  @default(false)
+  callsExternalApi                    Boolean  @default(false)
+  connectsMcp                         Boolean  @default(false)
+  createsPr                           Boolean  @default(false)
+  deploysOrReleases                   Boolean  @default(false)
+  completesTask                       Boolean  @default(false)
+  createdBy                           String
+  reviewedBy                          String?
+  reviewedAt                          DateTime?
+  archivedAt                          DateTime?
+  supersedesRecordId                  String?
+  supersededByRecordId                String?
+  supersededAt                        DateTime?
+  supersedeReason                     String?
+  correlationId                       String
+  createdAt                           DateTime @default(now())
+  updatedAt                           DateTime @updatedAt
+
+  @@index([targetSprint])
+  @@index([targetType, targetId])
+  @@index([status])
+  @@index([verdict])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("execution_approval_records")
+}
+
+model ExecutionReceiptRecord {
+  id                                  String   @id @default(cuid())
+  idempotencyKey                      String?  @unique
+  targetSprint                        String   @default("sprint_20")
+  baseline                            String   @default("sprint_1_19_complete")
+  intentRecordId                      String?
+  intentRecord                        ExecutionIntentRecord? @relation(fields: [intentRecordId], references: [id], onDelete: Cascade)
+  planRecordId                        String?
+  planRecord                          ExecutionPlanRecord? @relation(fields: [planRecordId], references: [id], onDelete: Cascade)
+  gateRecordId                        String?
+  gateRecord                          ExecutionGateRecord? @relation(fields: [gateRecordId], references: [id], onDelete: Cascade)
+  status                              String   @default("draft")
+  receiptTitle                        String
+  receiptSummary                      String
+  observedOutcomeSummary              String
+  operatorNotes                       String
+  evidenceRefsJson                    String   @default("[]")
+  receiptKind                         String   @default("manual_review_record")
+  actualExecutionPerformed            Boolean  @default(false)
+  sourceSystemAccessed                Boolean  @default(false)
+  receiptIsLocalRecordOnly            Boolean  @default(true)
+  receiptIsNotRuntimeReceipt          Boolean  @default(true)
+  receiptIsNotToolExecutionReceipt    Boolean  @default(true)
+  approvalRecordRefsJson              String   @default("[]")
+  auditRefsJson                       String   @default("[]")
+  isExecutionToken                    Boolean  @default(false)
+  isRoutingToken                      Boolean  @default(false)
+  isPermissionGrant                   Boolean  @default(false)
+  isReleaseToken                      Boolean  @default(false)
+  isDeployToken                       Boolean  @default(false)
+  isTaskCompletionToken               Boolean  @default(false)
+  grantsRuntimePermission             Boolean  @default(false)
+  mutatesSourceRecords                Boolean  @default(false)
+  executesAgent                       Boolean  @default(false)
+  continuesAgent                      Boolean  @default(false)
+  routesTask                          Boolean  @default(false)
+  assignsAgent                        Boolean  @default(false)
+  executesToolRun                     Boolean  @default(false)
+  executesWorkflow                    Boolean  @default(false)
+  writesFile                          Boolean  @default(false)
+  runsGit                             Boolean  @default(false)
+  callsExternalApi                    Boolean  @default(false)
+  connectsMcp                         Boolean  @default(false)
+  createsPr                           Boolean  @default(false)
+  deploysOrReleases                   Boolean  @default(false)
+  completesTask                       Boolean  @default(false)
+  createdBy                           String
+  reviewedBy                          String?
+  reviewedAt                          DateTime?
+  archivedAt                          DateTime?
+  supersedesRecordId                  String?
+  supersededByRecordId                String?
+  supersededAt                        DateTime?
+  supersedeReason                     String?
+  correlationId                       String
+  createdAt                           DateTime @default(now())
+  updatedAt                           DateTime @updatedAt
+
+  @@index([targetSprint])
+  @@index([intentRecordId])
+  @@index([planRecordId])
+  @@index([gateRecordId])
+  @@index([status])
+  @@index([receiptKind])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("execution_receipt_records")
+}
+
+model DepartmentTaskIntakeRecord {
+  id                             String   @id @default(cuid())
+  idempotencyKey                 String?  @unique
+  targetSprint                   String   @default("sprint_21")
+  baseline                       String   @default("sprint_1_20_complete")
+  status                         String   @default("draft")
+  sourceTaskId                   String
+  taskTitle                      String
+  taskSummary                    String
+  taskType                       String?
+  intakeReason                   String
+  intakeSource                   String   @default("operator")
+  candidateDepartmentProfileIdsJson String @default("[]")
+  candidateRoleIdsJson           String   @default("[]")
+  sanitizedEvidenceRefsJson      String   @default("[]")
+  riskNotesJson                  String   @default("[]")
+  assignmentProposalRefsJson     String   @default("[]")
+  roleFitReviewRefsJson          String   @default("[]")
+  approvalRecordRefsJson         String   @default("[]")
+  auditRecordRefsJson            String   @default("[]")
+  isExecutionToken               Boolean  @default(false)
+  isRoutingToken                 Boolean  @default(false)
+  isAssignmentToken              Boolean  @default(false)
+  isPermissionGrant              Boolean  @default(false)
+  isReleaseToken                 Boolean  @default(false)
+  isDeployToken                  Boolean  @default(false)
+  isTaskCompletionToken          Boolean  @default(false)
+  grantsRuntimePermission        Boolean  @default(false)
+  mutatesSourceRecords           Boolean  @default(false)
+  executesAgent                  Boolean  @default(false)
+  continuesAgent                 Boolean  @default(false)
+  routesTask                     Boolean  @default(false)
+  autoRoutesTask                 Boolean  @default(false)
+  assignsRuntimeAgent            Boolean  @default(false)
+  startsAgentRun                 Boolean  @default(false)
+  executesToolRun                Boolean  @default(false)
+  executesWorkflow               Boolean  @default(false)
+  writesFile                     Boolean  @default(false)
+  runsGit                        Boolean  @default(false)
+  callsExternalApi               Boolean  @default(false)
+  connectsMcp                    Boolean  @default(false)
+  createsPr                      Boolean  @default(false)
+  deploysOrReleases              Boolean  @default(false)
+  completesTask                  Boolean  @default(false)
+  createdBy                      String
+  reviewedBy                     String?
+  reviewedAt                     DateTime?
+  archivedAt                     DateTime?
+  supersedesRecordId             String?
+  supersededByRecordId           String?
+  supersededAt                   DateTime?
+  supersedeReason                String?
+  correlationId                  String
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
+
+  @@index([targetSprint])
+  @@index([sourceTaskId])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_task_intake_records")
+}
+
+model DepartmentAssignmentProposal {
+  id                             String   @id @default(cuid())
+  idempotencyKey                 String?  @unique
+  targetSprint                   String   @default("sprint_21")
+  baseline                       String   @default("sprint_1_20_complete")
+  status                         String   @default("draft")
+  intakeRecordId                 String
+  sourceTaskId                   String
+  proposedDepartmentProfileId    String
+  proposedPrimaryRoleId          String
+  proposedSupportingRoleIdsJson  String   @default("[]")
+  assignmentRationale            String
+  responsibilitySummary          String
+  evidenceCoverageSummary        String
+  riskSummary                    String
+  escalationPolicyRef            String?
+  permissionBoundaryRef          String?
+  roleFitReviewRefsJson          String   @default("[]")
+  approvalRecordRefsJson         String   @default("[]")
+  auditRecordRefsJson            String   @default("[]")
+  sanitizedEvidenceRefsJson      String   @default("[]")
+  assignmentRecommendationOnly   Boolean  @default(true)
+  localReviewOnly                Boolean  @default(true)
+  isExecutionToken               Boolean  @default(false)
+  isRoutingToken                 Boolean  @default(false)
+  isAssignmentToken              Boolean  @default(false)
+  isPermissionGrant              Boolean  @default(false)
+  isReleaseToken                 Boolean  @default(false)
+  isDeployToken                  Boolean  @default(false)
+  isTaskCompletionToken          Boolean  @default(false)
+  grantsRuntimePermission        Boolean  @default(false)
+  mutatesSourceRecords           Boolean  @default(false)
+  executesAgent                  Boolean  @default(false)
+  continuesAgent                 Boolean  @default(false)
+  routesTask                     Boolean  @default(false)
+  autoRoutesTask                 Boolean  @default(false)
+  assignsRuntimeAgent            Boolean  @default(false)
+  startsAgentRun                 Boolean  @default(false)
+  executesToolRun                Boolean  @default(false)
+  executesWorkflow               Boolean  @default(false)
+  writesFile                     Boolean  @default(false)
+  runsGit                        Boolean  @default(false)
+  callsExternalApi               Boolean  @default(false)
+  connectsMcp                    Boolean  @default(false)
+  createsPr                      Boolean  @default(false)
+  deploysOrReleases              Boolean  @default(false)
+  completesTask                  Boolean  @default(false)
+  createdBy                      String
+  reviewedBy                     String?
+  reviewedAt                     DateTime?
+  archivedAt                     DateTime?
+  supersedesRecordId             String?
+  supersededByRecordId           String?
+  supersededAt                   DateTime?
+  supersedeReason                String?
+  correlationId                  String
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
+
+  @@index([targetSprint])
+  @@index([intakeRecordId])
+  @@index([sourceTaskId])
+  @@index([proposedDepartmentProfileId])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_assignment_proposals")
+}
+
+model DepartmentRoleFitReview {
+  id                             String   @id @default(cuid())
+  idempotencyKey                 String?  @unique
+  targetSprint                   String   @default("sprint_21")
+  baseline                       String   @default("sprint_1_20_complete")
+  status                         String   @default("draft")
+  assignmentProposalId           String
+  departmentProfileId            String
+  roleId                         String
+  roleType                       String   @default("primary")
+  fitScore                       Int?
+  fitLevel                       String
+  fitRationale                   String
+  missingCapabilityNotesJson     String   @default("[]")
+  evidenceRefsJson               String   @default("[]")
+  recommendationOnly             Boolean  @default(true)
+  doesNotAssignRuntimeAgent      Boolean  @default(true)
+  approvalRecordRefsJson         String   @default("[]")
+  auditRecordRefsJson            String   @default("[]")
+  isExecutionToken               Boolean  @default(false)
+  isRoutingToken                 Boolean  @default(false)
+  isAssignmentToken              Boolean  @default(false)
+  isPermissionGrant              Boolean  @default(false)
+  isReleaseToken                 Boolean  @default(false)
+  isDeployToken                  Boolean  @default(false)
+  isTaskCompletionToken          Boolean  @default(false)
+  grantsRuntimePermission        Boolean  @default(false)
+  mutatesSourceRecords           Boolean  @default(false)
+  executesAgent                  Boolean  @default(false)
+  continuesAgent                 Boolean  @default(false)
+  routesTask                     Boolean  @default(false)
+  autoRoutesTask                 Boolean  @default(false)
+  assignsRuntimeAgent            Boolean  @default(false)
+  startsAgentRun                 Boolean  @default(false)
+  executesToolRun                Boolean  @default(false)
+  executesWorkflow               Boolean  @default(false)
+  writesFile                     Boolean  @default(false)
+  runsGit                        Boolean  @default(false)
+  callsExternalApi               Boolean  @default(false)
+  connectsMcp                    Boolean  @default(false)
+  createsPr                      Boolean  @default(false)
+  deploysOrReleases              Boolean  @default(false)
+  completesTask                  Boolean  @default(false)
+  createdBy                      String
+  reviewedBy                     String?
+  reviewedAt                     DateTime?
+  archivedAt                     DateTime?
+  supersedesRecordId             String?
+  supersededByRecordId           String?
+  supersededAt                   DateTime?
+  supersedeReason                String?
+  correlationId                  String
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
+
+  @@index([targetSprint])
+  @@index([assignmentProposalId])
+  @@index([departmentProfileId])
+  @@index([roleId])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_role_fit_reviews")
+}
+
+model DepartmentAssignmentApprovalRecord {
+  id                                  String   @id @default(cuid())
+  idempotencyKey                      String?  @unique
+  targetSprint                        String   @default("sprint_21")
+  baseline                            String   @default("sprint_1_20_complete")
+  status                              String   @default("draft")
+  targetType                          String
+  targetId                            String
+  reviewer                            String   @default("kelvin")
+  verdict                             String
+  reviewNotes                         String
+  confirmationArtifactId              String?
+  approvalScope                       String   @default("single_local_assignment_record_only")
+  doesNotExecuteAgent                 Boolean  @default(true)
+  doesNotContinueAgent                Boolean  @default(true)
+  doesNotAutoRouteTask                Boolean  @default(true)
+  doesNotAssignRuntimeAgent           Boolean  @default(true)
+  doesNotExecuteToolRun               Boolean  @default(true)
+  doesNotRequestRuntimePermission     Boolean  @default(true)
+  doesNotApproveRuntimePermission     Boolean  @default(true)
+  doesNotExecuteWorkflow              Boolean  @default(true)
+  doesNotWriteFile                    Boolean  @default(true)
+  doesNotRunGit                       Boolean  @default(true)
+  doesNotCallExternalApi              Boolean  @default(true)
+  doesNotConnectMcp                   Boolean  @default(true)
+  doesNotCreatePr                     Boolean  @default(true)
+  doesNotDeployReleasePublish         Boolean  @default(true)
+  doesNotCompleteTask                 Boolean  @default(true)
+  doesNotApproveFutureAssignments     Boolean  @default(true)
+  evidenceRefsJson                    String   @default("[]")
+  auditRecordRefsJson                 String   @default("[]")
+  isExecutionToken                    Boolean  @default(false)
+  isRoutingToken                      Boolean  @default(false)
+  isAssignmentToken                   Boolean  @default(false)
+  isPermissionGrant                   Boolean  @default(false)
+  isReleaseToken                      Boolean  @default(false)
+  isDeployToken                       Boolean  @default(false)
+  isTaskCompletionToken               Boolean  @default(false)
+  grantsRuntimePermission             Boolean  @default(false)
+  mutatesSourceRecords                Boolean  @default(false)
+  executesAgent                       Boolean  @default(false)
+  continuesAgent                      Boolean  @default(false)
+  routesTask                          Boolean  @default(false)
+  autoRoutesTask                      Boolean  @default(false)
+  assignsRuntimeAgent                 Boolean  @default(false)
+  startsAgentRun                      Boolean  @default(false)
+  executesToolRun                     Boolean  @default(false)
+  executesWorkflow                    Boolean  @default(false)
+  writesFile                          Boolean  @default(false)
+  runsGit                             Boolean  @default(false)
+  callsExternalApi                    Boolean  @default(false)
+  connectsMcp                         Boolean  @default(false)
+  createsPr                           Boolean  @default(false)
+  deploysOrReleases                   Boolean  @default(false)
+  completesTask                       Boolean  @default(false)
+  createdBy                           String
+  reviewedBy                          String?
+  reviewedAt                          DateTime?
+  archivedAt                          DateTime?
+  supersedesRecordId                  String?
+  supersededByRecordId                String?
+  supersededAt                        DateTime?
+  supersedeReason                     String?
+  correlationId                       String
+  createdAt                           DateTime @default(now())
+  updatedAt                           DateTime @updatedAt
+
+  @@index([targetSprint])
+  @@index([targetType, targetId])
+  @@index([status])
+  @@index([verdict])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_assignment_approval_records")
+}
+
+model DepartmentAssignmentAuditRecord {
+  id                             String   @id @default(cuid())
+  idempotencyKey                 String?  @unique
+  targetSprint                   String   @default("sprint_21")
+  baseline                       String   @default("sprint_1_20_complete")
+  status                         String   @default("draft")
+  targetType                     String
+  targetId                       String
+  eventType                      String
+  actorType                      String   @default("system_record")
+  actorId                        String?
+  beforeStatus                   String?
+  afterStatus                    String?
+  reason                         String
+  evidenceRefsJson               String   @default("[]")
+  localAuditOnly                 Boolean  @default(true)
+  doesNotMutateTargetTask        Boolean  @default(true)
+  doesNotAssignRuntimeAgent      Boolean  @default(true)
+  doesNotTriggerExecution        Boolean  @default(true)
+  isExecutionToken               Boolean  @default(false)
+  isRoutingToken                 Boolean  @default(false)
+  isAssignmentToken              Boolean  @default(false)
+  isPermissionGrant              Boolean  @default(false)
+  isReleaseToken                 Boolean  @default(false)
+  isDeployToken                  Boolean  @default(false)
+  isTaskCompletionToken          Boolean  @default(false)
+  grantsRuntimePermission        Boolean  @default(false)
+  mutatesSourceRecords           Boolean  @default(false)
+  executesAgent                  Boolean  @default(false)
+  continuesAgent                 Boolean  @default(false)
+  routesTask                     Boolean  @default(false)
+  autoRoutesTask                 Boolean  @default(false)
+  assignsRuntimeAgent            Boolean  @default(false)
+  startsAgentRun                 Boolean  @default(false)
+  executesToolRun                Boolean  @default(false)
+  executesWorkflow               Boolean  @default(false)
+  writesFile                     Boolean  @default(false)
+  runsGit                        Boolean  @default(false)
+  callsExternalApi               Boolean  @default(false)
+  connectsMcp                    Boolean  @default(false)
+  createsPr                      Boolean  @default(false)
+  deploysOrReleases              Boolean  @default(false)
+  completesTask                  Boolean  @default(false)
+  createdBy                      String
+  reviewedBy                     String?
+  reviewedAt                     DateTime?
+  archivedAt                     DateTime?
+  supersedesRecordId             String?
+  supersededByRecordId           String?
+  supersededAt                   DateTime?
+  supersedeReason                String?
+  correlationId                  String
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
+
+  @@index([targetSprint])
+  @@index([targetType, targetId])
+  @@index([eventType])
+  @@index([status])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("department_assignment_audit_records")
+}

@@ -1,0 +1,17 @@
+import { listMemory } from '@/lib/memory/repository'
+import { memoryErrorResponse, stringValue } from './_shared'
+
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url)
+    const data = await listMemory({
+      status: stringValue(url.searchParams.get('status')),
+      taskId: stringValue(url.searchParams.get('taskId')),
+      agentRunId: stringValue(url.searchParams.get('agentRunId')),
+      agentId: stringValue(url.searchParams.get('agentId')),
+    })
+    return Response.json({ ok: true, data })
+  } catch (error) {
+    return memoryErrorResponse(error)
+  }
+}

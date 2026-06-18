@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - sqlite-data:/app/prisma
+      - deliverables:/app/deliverables
+    environment:
+      - DATABASE_URL=file:./dev.db
+      - LLM_PROVIDER=${LLM_PROVIDER:-mock}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-deepseek-v4-pro}
+      - SYSTEM_PROMPT=${SYSTEM_PROMPT:-}
+    restart: unless-stopped
+
+volumes:
+  sqlite-data:
+  deliverables:

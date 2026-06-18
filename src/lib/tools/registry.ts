@@ -1,0 +1,193 @@
+import type { CommandPolicy, PermissionProfile, ToolDefinition, ToolRegistry } from './types'
+
+const createdAt = '2026-06-16T00:00:00.000Z'
+
+export const defaultPermissionProfile: PermissionProfile = {
+  id: 'default-deny-sprint-6',
+  name: 'Default Deny Sprint 6',
+  description: 'Allows local proposal records only. Denies all real side effects.',
+  allowedToolCategories: ['internal_noop', 'read'],
+  optionalAllowedToolCategories: ['read_simulated'],
+  deniedToolCategories: [
+    'read_simulated',
+    'read',
+    'write',
+    'command',
+    'git',
+    'pr',
+    'deploy',
+    'database',
+    'external_api',
+    'mcp',
+    'browser',
+  ],
+  allowedCommands: [],
+  deniedCommands: ['*'],
+  allowedPaths: [],
+  deniedPaths: ['*'],
+  allowExternalApi: false,
+  allowShell: false,
+  allowGit: false,
+  allowFileWrite: false,
+  allowPr: false,
+  allowDeploy: false,
+  allowDelete: false,
+  allowDatabaseMigration: false,
+  allowMcp: false,
+  allowBrowserAutomation: false,
+  requiresHumanForRisk: ['medium', 'high', 'critical'],
+  maxInputSizeChars: 12000,
+  maxResultSizeChars: 12000,
+}
+
+export const commandPolicy: CommandPolicy = {
+  id: 'command-policy-sprint-6',
+  version: 'sprint-6',
+  defaultDecision: 'deny',
+  profiles: [defaultPermissionProfile],
+  forbiddenCapabilities: [
+    'shell',
+    'git',
+    'file_write',
+    'pr',
+    'deploy',
+    'delete',
+    'database_migration',
+    'external_api',
+    'mcp',
+    'browser',
+  ],
+  createdAt,
+  updatedAt: createdAt,
+}
+
+export const toolDefinitions: ToolDefinition[] = [
+  {
+    id: 'noop.note',
+    name: 'noop.note',
+    displayName: 'Local Note Proposal',
+    description: 'Records a local no-op tool proposal for review. It does not execute anything.',
+    category: 'internal_noop',
+    version: 'sprint-6',
+    inputSchema: {
+      type: 'object',
+      required: ['note'],
+      properties: { note: { type: 'string' } },
+    },
+    riskLevel: 'low',
+    isReadOnly: true,
+    isDestructive: false,
+    isOpenWorld: false,
+    requiresHumanConfirmation: false,
+    permissionProfileRef: defaultPermissionProfile.id,
+    maxInputSizeChars: 12000,
+    maxResultSizeChars: 12000,
+    enabled: true,
+    sprint6Mode: 'proposal_only',
+    sprint11ExecutionMode: 'controlled_deterministic_local',
+    executorId: 'internal_noop.executor',
+    sandboxId: 'local-deterministic-sandbox-sprint-11',
+    executionPolicyRef: 'tool-execution-policy-sprint-11',
+    createdAt,
+    updatedAt: createdAt,
+  },
+  {
+    id: 'read_simulated.project_summary',
+    name: 'read_simulated.project_summary',
+    displayName: 'Simulated Project Summary',
+    description:
+      'Returns deterministic in-memory fixture data only. It does not read files, network, databases, environment, MCP, browser, or external APIs.',
+    category: 'read_simulated',
+    version: 'sprint-11',
+    inputSchema: {
+      type: 'object',
+      required: ['key'],
+      properties: { key: { type: 'string' } },
+    },
+    riskLevel: 'low',
+    isReadOnly: true,
+    isDestructive: false,
+    isOpenWorld: false,
+    requiresHumanConfirmation: false,
+    permissionProfileRef: defaultPermissionProfile.id,
+    maxInputSizeChars: 12000,
+    maxResultSizeChars: 12000,
+    enabled: true,
+    sprint6Mode: 'proposal_only',
+    sprint11ExecutionMode: 'controlled_deterministic_local',
+    executorId: 'read_simulated.executor',
+    sandboxId: 'local-deterministic-sandbox-sprint-11',
+    executionPolicyRef: 'tool-execution-policy-sprint-11',
+    createdAt,
+    updatedAt: createdAt,
+  },
+  {
+    id: 'read.project_context',
+    name: 'read.project_context',
+    displayName: 'Project Context Read Proposal',
+    description:
+      'Represents a future read request. Sprint 6 never reads files, network, MCP, browser, or external APIs.',
+    category: 'read',
+    version: 'sprint-6',
+    inputSchema: {
+      type: 'object',
+      required: ['scope'],
+      properties: { scope: { type: 'string' } },
+    },
+    riskLevel: 'low',
+    isReadOnly: true,
+    isDestructive: false,
+    isOpenWorld: false,
+    requiresHumanConfirmation: false,
+    permissionProfileRef: defaultPermissionProfile.id,
+    enabled: true,
+    sprint6Mode: 'proposal_only',
+    sprint11ExecutionMode: 'not_executable',
+    createdAt,
+    updatedAt: createdAt,
+  },
+  {
+    id: 'command.shell',
+    name: 'command.shell',
+    displayName: 'Shell Command Proposal',
+    description: 'Blocked command proposal. Sprint 6 never executes shell commands.',
+    category: 'command',
+    version: 'sprint-6',
+    inputSchema: {
+      type: 'object',
+      required: ['command'],
+      properties: { command: { type: 'string' } },
+    },
+    riskLevel: 'critical',
+    isReadOnly: false,
+    isDestructive: true,
+    isOpenWorld: true,
+    requiresHumanConfirmation: true,
+    permissionProfileRef: defaultPermissionProfile.id,
+    enabled: false,
+    sprint6Mode: 'disabled',
+    sprint11ExecutionMode: 'not_executable',
+    createdAt,
+    updatedAt: createdAt,
+  },
+]
+
+export const toolRegistry: ToolRegistry = {
+  id: 'tool-registry-sprint-6',
+  version: 'sprint-6',
+  defaultMode: 'default_deny',
+  defaultPermissionProfileRef: defaultPermissionProfile.id,
+  tools: toolDefinitions,
+  updatedAt: createdAt,
+}
+
+export function findToolByIdOrName(idOrName: string): ToolDefinition | undefined {
+  const normalized = idOrName.trim().toLowerCase()
+  return toolDefinitions.find(
+    (tool) => tool.id.toLowerCase() === normalized || tool.name.toLowerCase() === normalized
+  )
+}
+
+export function getPermissionProfile(id: string): PermissionProfile | undefined {
+  return commandPolicy.profiles.find((profile) => profile.id === id)
+}

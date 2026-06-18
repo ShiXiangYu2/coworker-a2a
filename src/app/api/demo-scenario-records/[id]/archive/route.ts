@@ -1,0 +1,18 @@
+import { mvpClosureErrorResponse, readJson, stringValue, transitionMVPRecordStatus } from '../../_shared'
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const body = await readJson(request)
+    const result = await transitionMVPRecordStatus({
+      recordType: 'demo_scenario_record',
+      id,
+      targetStatus: 'archived',
+      reason: stringValue(body.reason) ?? 'Archived local demo scenario record.',
+    })
+    return Response.json({ ok: true, data: result.record, auditEvents: [result.auditEvent], safetyNote: result.safetyNote })
+  } catch (error) {
+    return mvpClosureErrorResponse(error)
+  }
+}
+
