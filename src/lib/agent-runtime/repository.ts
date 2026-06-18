@@ -52,15 +52,18 @@ export async function startAgentRunFromTask(
 
   const harmonyTask = recordToHarmonyTask(task)
   // Try LLM-driven analysis first, fall back to deterministic on error
+  let usedLLM = false
   let rawResult: Awaited<ReturnType<typeof produceLLMAgentResult>>
   try {
     rawResult = await produceLLMAgentResult(harmonyTask)
+    usedLLM = true
   } catch {
     rawResult = produceDeterministicAgentResult(harmonyTask)
   }
   let result = validateAgentResult(rawResult)
   if (result.findings.length === 0 && result.proposedChanges.length === 0) {
     result = produceDeterministicAgentResult(harmonyTask)
+    usedLLM = false
   }
   const correlationId = `agent-${task.id}-${Date.now()}`
   const startedAt = new Date()
@@ -125,8 +128,10 @@ export async function startAgentRunFromTask(
       index: 2,
       kind: 'llm_analysis',
       status: 'completed',
-      summary: 'Produced deterministic AgentResult without real LLM Runtime.',
-      input: { producer: 'deterministic' },
+      summary: usedLLM
+        ? 'Produced AgentResult via LLM tool use.'
+        : 'Produced deterministic AgentResult (LLM fallback).',
+      input: { producer: usedLLM ? 'llm' : 'deterministic' },
       output: result,
     })
     await insertAgentStep(tx, {
@@ -209,7 +214,9 @@ export async function startAgentRunFromTask(
           actorId: task.targetAgentId,
           beforeStatus: 'created',
           afterStatus: 'running',
-          reason: 'AgentRun started deterministic analysis.',
+          reason: usedLLM
+            ? 'AgentRun started with LLM-driven analysis.'
+            : 'AgentRun started deterministic analysis.',
           payloadJson: encodeJson({ agentRunId }),
         },
         {
