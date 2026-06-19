@@ -1,5 +1,5 @@
-﻿import { randomUUID } from 'node:crypto'
-import * as fsPromises from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { access, mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
 
 export type ObsidianDraftAction = 'write_local_markdown_draft'
@@ -53,7 +53,7 @@ export function createObsidianDraftPlan(input: {
 }, options: ObsidianDraftOptions = {}): ObsidianDraftPlan {
   const targetDirectory = resolveDraftDirectory(options.vaultPath)
   const filename = sanitizeMarkdownFilename(input.filename)
-  const targetPath = resolve(targetDirectory, filename)
+  const targetPath = resolve(/* turbopackIgnore: true */ targetDirectory, filename)
   assertInsideDirectory(targetDirectory, targetPath)
 
   return {
@@ -106,12 +106,8 @@ export async function executeObsidianDraftPlan(
   const targetPath = await nextAvailablePath(plan.targetPath, timestamp)
   assertInsideDirectory(plan.targetDirectory, targetPath)
 
-  await mkdir(plan.targetDirectory, { recursive: true })
-  const persistDraft = Reflect.get(
-    fsPromises,
-    ['write', 'File'].join('')
-  ) as (path: string, data: string, encoding: BufferEncoding) => Promise<void>
-  await persistDraft(targetPath, plan.content, 'utf8')
+  await mkdir(/* turbopackIgnore: true */ plan.targetDirectory, { recursive: true })
+  await writeFile(/* turbopackIgnore: true */ targetPath, plan.content, 'utf8')
 
   return {
     id: `obsidian-draft-receipt-${randomUUID()}`,
@@ -125,8 +121,6 @@ export async function executeObsidianDraftPlan(
     reason: 'Kelvin-approved demo produced an Obsidian vault Markdown draft.',
   }
 }
-
-const { mkdir } = fsPromises
 
 function sanitizeMarkdownFilename(filename: string): string {
   const normalized = filename.trim().replace(/[\\/:*?"<>|]+/g, '-')
@@ -146,13 +140,13 @@ function assertInsideDirectory(directory: string, targetPath: string): void {
 }
 
 function resolveDraftDirectory(vaultPath: string | undefined): string {
-  const vaultRoot = resolve(vaultPath?.trim() || process.env.OBSIDIAN_VAULT_PATH?.trim() || DEFAULT_VAULT_PATH)
-  return resolve(vaultRoot, ...OBSIDIAN_DRAFT_SUBDIR)
+  const vaultRoot = resolve(/* turbopackIgnore: true */ vaultPath?.trim() || process.env.OBSIDIAN_VAULT_PATH?.trim() || DEFAULT_VAULT_PATH)
+  return resolve(/* turbopackIgnore: true */ vaultRoot, ...OBSIDIAN_DRAFT_SUBDIR)
 }
 
 async function nextAvailablePath(targetPath: string, timestamp: string): Promise<string> {
   try {
-    await fsPromises.access(targetPath)
+    await access(/* turbopackIgnore: true */ targetPath)
   } catch {
     return targetPath
   }
@@ -161,5 +155,5 @@ async function nextAvailablePath(targetPath: string, timestamp: string): Promise
   const ext = extname(targetPath) || '.md'
   const name = basename(targetPath, ext)
   const suffix = timestamp.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z').replace('T', '-')
-  return resolve(dir, `${name}-${suffix}${ext}`)
+  return resolve(/* turbopackIgnore: true */ dir, `${name}-${suffix}${ext}`)
 }

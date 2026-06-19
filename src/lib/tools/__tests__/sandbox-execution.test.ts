@@ -202,15 +202,14 @@ describe('Sandbox Execution', () => {
     })
 
     it('should capture stderr for failed commands', () => {
-      // git diff with invalid path
-      const result = executeInSandbox('git diff --nonexistent', {
-        cwd: 'D:/AI编程/产品自研/恒识/coworker-a2a',
+      const result = executeInSandbox('node -e "console.error(\'sandbox stderr\'); process.exit(2)"', {
+        whitelist: [
+          { pattern: 'node -e', category: 'test' as const, riskLevel: 'low' as const, description: 'node inline test' },
+        ],
       })
-      // git diff with invalid option may succeed or fail depending on git version
-      // Just verify we get a result
-      expect(result).toHaveProperty('status')
-      expect(result).toHaveProperty('stdout')
-      expect(result).toHaveProperty('stderr')
+      expect(result.status).toBe('failed')
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toContain('sandbox stderr')
     })
   })
 

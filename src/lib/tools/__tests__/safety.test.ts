@@ -48,10 +48,10 @@ function files(dir: string): string[] {
 
 describe('Sprint 6 tool safety boundary', () => {
   it('does not import forbidden side-effect paths in tool library', () => {
-    // Sprint 19: executor.ts and agent-tools.ts are excluded because they intentionally implement tool execution
+    // Sprint 19+: executor.ts, agent-tools.ts, and obsidian-draft.ts are excluded because they intentionally implement controlled tool execution
     // state-machine.ts and types.ts are excluded because they define tool state constants
     const sourceFiles = files(join(process.cwd(), 'src/lib/tools')).filter(
-      (file) => file.endsWith('.ts') && !file.includes('__tests__') && !file.includes('executor.ts') && !file.includes('agent-tools.ts') && !file.includes('state-machine.ts') && !file.includes('types.ts')
+      (file) => file.endsWith('.ts') && !file.includes('__tests__') && !file.includes('executor.ts') && !file.includes('agent-tools.ts') && !file.includes('obsidian-draft.ts') && !file.includes('state-machine.ts') && !file.includes('types.ts')
     )
     const combined = sourceFiles.map((file) => readFileSync(file, 'utf8')).join('\n')
 
