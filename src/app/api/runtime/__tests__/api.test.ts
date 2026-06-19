@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   blockRuntimeDispatchJob,
+  buildRuntimeOperatorTaskViewModel,
   claimRuntimeDispatchJob,
   completeRuntimeDispatchJobDryRun,
   completeRuntimeDispatchJobObsidianWrite,
@@ -8,6 +9,8 @@ import {
   createRuntimeExecutionToken,
   failRuntimeDispatchJob,
   getRuntimeDispatchJobById,
+  getRuntimeDispatchJobTimeline,
+  getTaskRuntimeExecutionSummary,
   getRuntimeExecutionReceiptByJobId,
   getRuntimeExecutionTokenById,
   heartbeatRuntimeDispatchJob,
@@ -16,12 +19,15 @@ import {
   listRuntimeExecutionTokens,
   listRuntimeRecoveryPoints,
   runRuntimeDispatchJobOnce,
+  seedRuntimeSampleJob,
   startRuntimeDispatchJob,
 } from '@/lib/runtime-execution'
 import { POST as createToken, GET as listTokens } from '../tokens/route'
 import { GET as getToken } from '../tokens/[id]/route'
 import { POST as createJob, GET as listJobs } from '../jobs/route'
+import { POST as seedSampleJob } from '../seed-sample-job/route'
 import { GET as getJob } from '../jobs/[id]/route'
+import { GET as getJobTimeline } from '../jobs/[id]/timeline/route'
 import { POST as claimJob } from '../jobs/claim/route'
 import { POST as heartbeatJob } from '../jobs/[id]/heartbeat/route'
 import { POST as startJob } from '../jobs/[id]/start/route'
@@ -34,6 +40,8 @@ import { GET as getJobAttempts } from '../jobs/[id]/attempts/route'
 import { GET as getJobReceipt } from '../jobs/[id]/receipt/route'
 import { GET as getJobRecovery } from '../jobs/[id]/recovery/route'
 import { GET as getTaskRuntimeJobs } from '../../tasks/[id]/runtime-jobs/route'
+import { GET as getTaskRuntimeSummary } from '../../tasks/[id]/runtime-summary/route'
+import { GET as getTaskRuntimeOperatorView } from '../../tasks/[id]/runtime-operator-view/route'
 
 vi.mock('@/lib/runtime-execution', async () => {
   const safetyNote = 'Sprint 22 runtime execution is limited to queued records only.'
@@ -82,6 +90,137 @@ vi.mock('@/lib/runtime-execution', async () => {
     ]),
     getRuntimeExecutionTokenById: vi.fn(async (id) => id === 'missing' ? null : { id, status: 'draft' }),
     getRuntimeDispatchJobById: vi.fn(async (id) => id === 'missing' ? null : { id, status: 'queued' }),
+    getRuntimeDispatchJobTimeline: vi.fn(async (id) => {
+      if (id === 'missing') throw new RuntimeExecutionApiError('Runtime dispatch job not found.', 404)
+      return {
+        job: { id, status: 'succeeded', runtimeTokenId: 'token-1' },
+        token: { id: 'token-1', status: 'consumed' },
+        attempts: [
+          { id: 'attempt-1', jobId: id, status: 'leased' },
+          { id: 'attempt-2', jobId: id, status: 'running' },
+        ],
+        receipt: { id: 'receipt-1', jobId: id, status: 'dry_run' },
+        recovery: [{ id: 'recovery-1', jobId: id, recoveryKind: 'post_execute' }],
+        derived: {
+          hasReceipt: true,
+          receiptStatus: 'dry_run',
+          attemptCount: 2,
+          recoveryCount: 1,
+          isTerminal: true,
+          leaseActive: false,
+        },
+        safetyNote,
+      }
+    }),
+    getTaskRuntimeExecutionSummary: vi.fn(async (taskId) => taskId === 'empty-task'
+      ? {
+        taskId,
+        jobs: [],
+        counts: {
+          total: 0,
+          queued: 0,
+          leased: 0,
+          running: 0,
+          succeeded: 0,
+          failed: 0,
+          blocked: 0,
+          cancelled: 0,
+        },
+        receipts: {
+          dryRunCount: 0,
+          succeededCount: 0,
+        },
+        derived: {
+          hasAnyLiveJob: false,
+          hasAnySucceededJob: false,
+          latestJobId: null,
+        },
+        safetyNote,
+      }
+      : {
+        taskId,
+        jobs: [
+          {
+            job: { id: 'job-1', status: 'queued', runtimeTokenId: 'token-1' },
+            token: { id: 'token-1', status: 'active' },
+            attempts: [],
+            receipt: null,
+            recovery: [],
+            derived: {
+              hasReceipt: false,
+              receiptStatus: null,
+              attemptCount: 0,
+              recoveryCount: 0,
+              isTerminal: false,
+              leaseActive: false,
+            },
+            safetyNote,
+          },
+        ],
+        counts: {
+          total: 1,
+          queued: 1,
+          leased: 0,
+          running: 0,
+          succeeded: 0,
+          failed: 0,
+          blocked: 0,
+          cancelled: 0,
+        },
+        receipts: {
+          dryRunCount: 0,
+          succeededCount: 0,
+        },
+        derived: {
+          hasAnyLiveJob: true,
+          hasAnySucceededJob: false,
+          latestJobId: 'job-1',
+        },
+        safetyNote,
+      }),
+    buildRuntimeOperatorTaskViewModel: vi.fn(async (taskId) => ({
+      taskId,
+      summary: {
+        taskId,
+        jobs: [],
+        counts: {
+          total: 0,
+          queued: 0,
+          leased: 0,
+          running: 0,
+          succeeded: 0,
+          failed: 0,
+          blocked: 0,
+          cancelled: 0,
+        },
+        receipts: {
+          dryRunCount: 0,
+          succeededCount: 0,
+        },
+        derived: {
+          hasAnyLiveJob: false,
+          hasAnySucceededJob: false,
+          latestJobId: null,
+        },
+        safetyNote,
+      },
+      latestJob: null,
+      latestReceipt: null,
+      jobs: [],
+      statusBands: {
+        live: [],
+        succeeded: [],
+        blocked: [],
+        failed: [],
+      },
+      highlight: {
+        primaryStatus: 'empty',
+        latestJobId: null,
+        latestReceiptStatus: null,
+        hasActionableLiveJob: false,
+      },
+      safetyNote,
+    })),
     claimRuntimeDispatchJob: vi.fn(async ({ workerId }) => ({
       record: { id: 'job-1', status: 'leased', leaseOwner: workerId },
       attempt: { id: 'attempt-1', status: 'leased', workerId },
@@ -186,6 +325,23 @@ vi.mock('@/lib/runtime-execution', async () => {
         safetyNote,
       }
     }),
+    seedRuntimeSampleJob: vi.fn(async ({ taskId, createdBy, workerHint, vaultPath }) => ({
+      ok: true,
+      tokenId: 'token-seed-1',
+      jobId: 'job-seed-1',
+      taskId,
+      correlationId: 'runtime-seed-corr-1',
+      idempotencyKey: 'runtime-seed-idem-1',
+      connectorId: 'obsidian_local',
+      actionType: 'write_local_markdown_draft',
+      createdBy,
+      nextCommands: {
+        verifyDryRun: `npx tsx scripts/runtime-verify-once.ts --jobId=job-seed-1 --workerId=${workerHint ?? 'worker-dev-1'}`,
+        runDryRun: `npx tsx scripts/runtime-run-once.ts --jobId=job-seed-1 --workerId=${workerHint ?? 'worker-dev-1'} --mode=dry_run`,
+        runObsidianWrite: `npx tsx scripts/runtime-run-once.ts --jobId=job-seed-1 --workerId=${workerHint ?? 'worker-dev-1'} --mode=obsidian_write --execute=true --vaultPath=${vaultPath ?? String.raw`D:\AI-Vault`}`,
+      },
+      safetyNote,
+    })),
   }
 })
 
@@ -324,6 +480,46 @@ describe('Sprint 22 Runtime API', () => {
     expect(listRuntimeDispatchJobs).toHaveBeenCalledWith(expect.objectContaining({ runtimeTokenId: 'token-1' }))
   })
 
+  it('seeds a sample runtime token and queued job without execution', async () => {
+    const response = await seedSampleJob(jsonRequest('http://localhost/api/runtime/seed-sample-job', {
+      taskId: 'task-seed-1',
+      createdBy: 'api-test',
+      workerHint: 'worker-seed-1',
+      vaultPath: String.raw`D:\AI-Vault`,
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(body.tokenId).toBe('token-seed-1')
+    expect(body.jobId).toBe('job-seed-1')
+    expect(body.correlationId).toBe('runtime-seed-corr-1')
+    expect(body.idempotencyKey).toBe('runtime-seed-idem-1')
+    expect(body.nextCommands.verifyDryRun).toContain('scripts/runtime-verify-once.ts')
+    expect(body.nextCommands.runDryRun).toContain('--mode=dry_run')
+    expect(body.nextCommands.runObsidianWrite).toContain('--execute=true')
+    expect(body.safetyNote).toContain('Sprint 22')
+    expect(seedRuntimeSampleJob).toHaveBeenCalledWith({
+      taskId: 'task-seed-1',
+      createdBy: 'api-test',
+      workerHint: 'worker-seed-1',
+      vaultPath: String.raw`D:\AI-Vault`,
+    })
+    expect(runRuntimeDispatchJobOnce).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobDryRun).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
+  })
+
+  it('rejects sample seed requests without taskId', async () => {
+    const response = await seedSampleJob(jsonRequest('http://localhost/api/runtime/seed-sample-job', {
+      createdBy: 'api-test',
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.message).toContain('taskId is required')
+    expect(seedRuntimeSampleJob).not.toHaveBeenCalled()
+  })
+
   it('queries token/job by id and task-linked jobs', async () => {
     const token = await getToken(new Request('http://localhost/api/runtime/tokens/token-1'), {
       params: Promise.resolve({ id: 'token-1' }),
@@ -341,6 +537,63 @@ describe('Sprint 22 Runtime API', () => {
     expect(getRuntimeExecutionTokenById).toHaveBeenCalledWith('token-1')
     expect(getRuntimeDispatchJobById).toHaveBeenCalledWith('job-1')
     expect(listRuntimeDispatchJobs).toHaveBeenCalledWith({ taskId: 'task-1', limit: 100 })
+  })
+
+  it('queries task runtime summary without execution', async () => {
+    const response = await getTaskRuntimeSummary(new Request('http://localhost/api/tasks/task-1/runtime-summary'), {
+      params: Promise.resolve({ id: 'task-1' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.taskId).toBe('task-1')
+    expect(body.data.jobs).toHaveLength(1)
+    expect(body.data.counts.total).toBe(1)
+    expect(body.data.receipts.succeededCount).toBe(0)
+    expect(body.data.derived).toEqual({
+      hasAnyLiveJob: true,
+      hasAnySucceededJob: false,
+      latestJobId: 'job-1',
+    })
+    expect(body.safetyNote).toContain('Sprint 22')
+    expect(getTaskRuntimeExecutionSummary).toHaveBeenCalledWith('task-1')
+    expect(runRuntimeDispatchJobOnce).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobDryRun).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
+  })
+
+  it('returns an empty task runtime summary when no jobs exist', async () => {
+    const response = await getTaskRuntimeSummary(new Request('http://localhost/api/tasks/empty-task/runtime-summary'), {
+      params: Promise.resolve({ id: 'empty-task' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.taskId).toBe('empty-task')
+    expect(body.data.jobs).toEqual([])
+    expect(body.data.counts.total).toBe(0)
+    expect(body.data.derived.latestJobId).toBeNull()
+    expect(getTaskRuntimeExecutionSummary).toHaveBeenCalledWith('empty-task')
+  })
+
+  it('queries task runtime operator view without execution', async () => {
+    const response = await getTaskRuntimeOperatorView(new Request('http://localhost/api/tasks/task-1/runtime-operator-view'), {
+      params: Promise.resolve({ id: 'task-1' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.taskId).toBe('task-1')
+    expect(body.data.summary.taskId).toBe('task-1')
+    expect(body.data.latestJob).toBeNull()
+    expect(body.data.latestReceipt).toBeNull()
+    expect(body.data.statusBands.live).toEqual([])
+    expect(body.data.highlight.primaryStatus).toBe('empty')
+    expect(body.safetyNote).toContain('Sprint 22')
+    expect(buildRuntimeOperatorTaskViewModel).toHaveBeenCalledWith('task-1')
+    expect(runRuntimeDispatchJobOnce).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobDryRun).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
   })
 
   it('queries runtime attempts, receipt, and recovery metadata without execution', async () => {
@@ -372,6 +625,45 @@ describe('Sprint 22 Runtime API', () => {
     expect(runRuntimeDispatchJobOnce).not.toHaveBeenCalled()
     expect(completeRuntimeDispatchJobDryRun).not.toHaveBeenCalled()
     expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
+  })
+
+  it('queries runtime timeline summary without execution', async () => {
+    const response = await getJobTimeline(new Request('http://localhost/api/runtime/jobs/job-1/timeline'), {
+      params: Promise.resolve({ id: 'job-1' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.job.id).toBe('job-1')
+    expect(body.data.token.id).toBe('token-1')
+    expect(body.data.attempts).toHaveLength(2)
+    expect(body.data.receipt.status).toBe('dry_run')
+    expect(body.data.recovery[0].recoveryKind).toBe('post_execute')
+    expect(body.data.derived).toEqual({
+      hasReceipt: true,
+      receiptStatus: 'dry_run',
+      attemptCount: 2,
+      recoveryCount: 1,
+      isTerminal: true,
+      leaseActive: false,
+    })
+    expect(body.safetyNote).toContain('Sprint 22')
+    expect(getRuntimeDispatchJobTimeline).toHaveBeenCalledWith('job-1')
+    expect(runRuntimeDispatchJobOnce).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobDryRun).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
+  })
+
+  it('returns not_found for missing runtime timeline jobs', async () => {
+    const response = await getJobTimeline(new Request('http://localhost/api/runtime/jobs/missing/timeline'), {
+      params: Promise.resolve({ id: 'missing' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(body.error.code).toBe('runtime_execution_error')
+    expect(body.error.message).toContain('Runtime dispatch job not found')
+    expect(getRuntimeDispatchJobTimeline).toHaveBeenCalledWith('missing')
   })
 
   it('returns not_found for missing runtime receipt', async () => {
