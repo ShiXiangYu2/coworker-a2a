@@ -1,3 +1,4 @@
+import { normalizeSandboxTargetPath, validateSandboxFileWriteInput } from '../sandbox/file-write-sandbox'
 import { findToolByIdOrName, getPermissionProfile } from './registry'
 import type {
   ToolCall,
@@ -11,6 +12,7 @@ export function validateToolInput(
   input: unknown
 ): Pick<ToolPermission, 'inputValidationStatus' | 'schemaValidationErrors'> {
   if (!tool) return { inputValidationStatus: 'skipped' }
+  if (tool.id === 'write.sandbox_deliverable') return validateSandboxToolInput(input)
   if (!tool.inputSchema || tool.inputSchema.type !== 'object') {
     return { inputValidationStatus: 'skipped' }
   }
@@ -35,6 +37,21 @@ export function validateToolInput(
   return errors.length > 0
     ? { inputValidationStatus: 'invalid', schemaValidationErrors: errors }
     : { inputValidationStatus: 'valid' }
+}
+
+function validateSandboxToolInput(
+  input: unknown
+): Pick<ToolPermission, 'inputValidationStatus' | 'schemaValidationErrors'> {
+  try {
+    const validated = validateSandboxFileWriteInput(input)
+    normalizeSandboxTargetPath(validated.targetPath)
+    return { inputValidationStatus: 'valid' }
+  } catch (error) {
+    return {
+      inputValidationStatus: 'invalid',
+      schemaValidationErrors: [error instanceof Error ? error.message : 'Invalid sandbox file write input.'],
+    }
+  }
 }
 
 export function evaluateToolPermission(toolCall: ToolCall): Omit<ToolPermission, 'id' | 'createdAt'> {
@@ -69,6 +86,10 @@ export function evaluateToolPermission(toolCall: ToolCall): Omit<ToolPermission,
     reason = tool.requiresHumanConfirmation
       ? 'Denied high-risk category requires Kelvin review as a local record only.'
       : 'Denied category cannot proceed.'
+  } else if (tool.id === 'write.sandbox_deliverable') {
+    matchedRules.push('sprint22.human_gated_sandbox_write')
+    decision = 'allow_controlled_execution'
+    reason = 'Sandbox deliverable write may continue only through human-gated controlled execution.'
   } else if (tool.isDestructive || tool.isOpenWorld) {
     matchedRules.push('risk.destructive_or_open_world')
     decision = 'requires_human'

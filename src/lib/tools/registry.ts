@@ -63,6 +63,40 @@ export const commandPolicy: CommandPolicy = {
 
 export const toolDefinitions: ToolDefinition[] = [
   {
+    id: 'write.sandbox_deliverable',
+    name: 'write.sandbox_deliverable',
+    displayName: 'Sandbox Deliverable Write',
+    description:
+      'Writes one approved deliverable file under deliverables/. Only .md, .json, or .txt are allowed. It cannot modify source, run Git, call APIs, MCP, or deploy.',
+    category: 'write_sandbox',
+    version: 'sprint-22',
+    inputSchema: {
+      type: 'object',
+      required: ['targetPath', 'content', 'format'],
+      properties: {
+        targetPath: { type: 'string' },
+        content: { type: 'string' },
+        format: { type: 'string' },
+      },
+    },
+    riskLevel: 'medium',
+    isReadOnly: false,
+    isDestructive: false,
+    isOpenWorld: false,
+    requiresHumanConfirmation: true,
+    permissionProfileRef: defaultPermissionProfile.id,
+    maxInputSizeChars: 12000,
+    maxResultSizeChars: 12000,
+    enabled: true,
+    sprint6Mode: 'proposal_only',
+    sprint11ExecutionMode: 'controlled_deterministic_local',
+    executorId: 'write_sandbox_deliverable.executor',
+    sandboxId: 'sandbox-file-write-deliverables-sprint-22',
+    executionPolicyRef: 'tool-execution-policy-sprint-22',
+    createdAt,
+    updatedAt: createdAt,
+  },
+  {
     id: 'noop.note',
     name: 'noop.note',
     displayName: 'Local Note Proposal',
