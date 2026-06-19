@@ -12,7 +12,7 @@ vi.mock('../repository', () => ({
     : {
       id,
       runtimeTokenId: 'token-1',
-      status: id === 'running-job' ? 'running' : 'succeeded',
+      status: id === 'queued-job' ? 'queued' : id === 'running-job' ? 'running' : 'succeeded',
       leaseOwner: id === 'running-job' ? 'worker-1' : null,
       leaseExpiresAt: id === 'running-job' ? new Date('2026-06-19T01:01:00.000Z') : null,
     }),
@@ -21,7 +21,7 @@ vi.mock('../repository', () => ({
     { id: 'attempt-1', jobId, status: 'leased' },
     { id: 'attempt-2', jobId, status: 'running' },
   ]),
-  getRuntimeExecutionReceiptByJobId: vi.fn(async (jobId) => jobId === 'running-job'
+  getRuntimeExecutionReceiptByJobId: vi.fn(async (jobId) => jobId === 'running-job' || jobId === 'queued-job'
     ? null
     : { id: 'receipt-1', jobId, status: 'dry_run' }),
   listRuntimeRecoveryPoints: vi.fn(async (jobId) => [
@@ -68,6 +68,8 @@ describe('Sprint 22 runtime timeline summary', () => {
       recoveryCount: 1,
       isTerminal: true,
       leaseActive: false,
+      issuedRuntimeTokenActive: true,
+      awaitingRuntimeExecution: false,
     })
   })
 
@@ -78,6 +80,17 @@ describe('Sprint 22 runtime timeline summary', () => {
     expect(result.derived.receiptStatus).toBeNull()
     expect(result.derived.isTerminal).toBe(false)
     expect(result.derived.leaseActive).toBe(true)
+    expect(result.derived.awaitingRuntimeExecution).toBe(false)
+  })
+
+  it('derives awaiting runtime execution for active-token queued jobs without receipts', async () => {
+    const result = await getRuntimeDispatchJobTimeline('queued-job')
+
+    expect(result.job?.status).toBe('queued')
+    expect(result.token?.status).toBe('active')
+    expect(result.receipt).toBeNull()
+    expect(result.derived.issuedRuntimeTokenActive).toBe(true)
+    expect(result.derived.awaitingRuntimeExecution).toBe(true)
   })
 
   it('returns 404-style errors for missing jobs', async () => {
