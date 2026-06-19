@@ -14,7 +14,6 @@ import type { AgentResult } from '@/lib/agent-runtime/types'
 import { commandPolicy, findToolByIdOrName, toolRegistry } from './registry'
 import {
   assertDeterministicOutput,
-  defaultToolExecutionPolicy,
   executeDeterministicLocalTool,
   executeSandboxFileWriteTool,
   getPolicyForToolCategory,
