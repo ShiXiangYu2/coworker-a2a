@@ -189,6 +189,10 @@ describe('Sprint 18-21 Operator Console Safety', () => {
     expect(source).toContain('Archive Execution Record')
     expect(source).toContain('View Execution Audit')
     expect(source).toContain('View Execution Timeline')
+    expect(source).toContain('/api/agent-task-runs?correlationId=')
+    expect(source).toContain('/api/runtime-executions?correlationId=')
+    expect(source).toContain('/api/runs?limit=5')
+    expect(source).toContain('Recent Runs')
 
     for (const label of forbiddenRuntimeLabels) {
       expect(source).not.toContain(label)

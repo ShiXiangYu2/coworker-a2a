@@ -2911,6 +2911,208 @@ model ExecutionReceiptRecord {
   @@map("execution_receipt_records")
 }
 
+model RuntimeExecutionRecord {
+  id                String   @id @default(cuid())
+  correlationId     String?
+  toolId            String
+  action            String
+  status            String
+  policyDecision    String
+  targetPath        String
+  approvalRecordId  String?
+  executionPlanId   String
+  receiptJson       String   @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([toolId])
+  @@index([status])
+  @@index([policyDecision])
+  @@index([approvalRecordId])
+  @@index([executionPlanId])
+  @@index([createdAt])
+  @@map("runtime_execution_records")
+}
+
+model AgentTaskRunRecord {
+  id             String    @id @default(cuid())
+  correlationId  String?
+  orchestrator   String
+  agentId        String
+  taskId         String
+  taskType       String
+  status         String
+  inputJson      String
+  outputJson     String?
+  errorJson      String?
+  startedAt      DateTime
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([correlationId])
+  @@index([orchestrator])
+  @@index([agentId])
+  @@index([taskId])
+  @@index([taskType])
+  @@index([status])
+  @@index([startedAt])
+  @@index([createdAt])
+  @@map("agent_task_run_records")
+}
+
+model RuntimeExecutionToken {
+  id                        String   @id @default(cuid())
+  idempotencyKey            String?  @unique
+  targetSprint              String   @default("sprint_22")
+  baseline                  String   @default("sprint_1_21_complete")
+  status                    String   @default("draft")
+  taskId                    String
+  agentRunId                String
+  executionPlanRecordId     String
+  executionApprovalRecordId String
+  connectorId               String
+  actionType                String
+  scopeJson                 String   @default("{}")
+  issuedBy                  String
+  approvedBy                String
+  expiresAt                 DateTime
+  consumedAt                DateTime?
+  revokedAt                 DateTime?
+  correlationId             String
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  jobs                      RuntimeDispatchJob[]
+  receipts                  RuntimeExecutionReceipt[]
+
+  @@index([targetSprint])
+  @@index([baseline])
+  @@index([taskId])
+  @@index([agentRunId])
+  @@index([executionPlanRecordId])
+  @@index([executionApprovalRecordId])
+  @@index([status])
+  @@index([connectorId])
+  @@index([actionType])
+  @@index([correlationId])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("runtime_execution_tokens")
+}
+
+model RuntimeDispatchJob {
+  id                String   @id @default(cuid())
+  idempotencyKey    String?  @unique
+  targetSprint      String   @default("sprint_22")
+  baseline          String   @default("sprint_1_21_complete")
+  runtimeTokenId    String
+  runtimeToken      RuntimeExecutionToken @relation(fields: [runtimeTokenId], references: [id], onDelete: Cascade)
+  taskId            String
+  status            String   @default("queued")
+  connectorId       String
+  actionType        String
+  payloadJson       String   @default("{}")
+  priority          Int      @default(100)
+  attemptCount      Int      @default(0)
+  maxAttempts       Int      @default(2)
+  leaseOwner        String?
+  leaseExpiresAt    DateTime?
+  scheduledAt       DateTime @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  lastErrorJson     String?
+  correlationId     String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  attempts          RuntimeDispatchAttempt[]
+  receipt           RuntimeExecutionReceipt?
+  recoveryPoints    RuntimeRecoveryPoint[]
+
+  @@index([targetSprint])
+  @@index([baseline])
+  @@index([runtimeTokenId])
+  @@index([taskId])
+  @@index([status])
+  @@index([connectorId])
+  @@index([actionType])
+  @@index([scheduledAt])
+  @@index([leaseExpiresAt])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("runtime_dispatch_jobs")
+}
+
+model RuntimeDispatchAttempt {
+  id            String   @id @default(cuid())
+  jobId          String
+  job            RuntimeDispatchJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  attempt        Int
+  status         String
+  workerId       String
+  startedAt      DateTime @default(now())
+  endedAt        DateTime?
+  errorJson      String?
+  receiptId      String?
+  createdAt      DateTime @default(now())
+
+  recoveryPoints RuntimeRecoveryPoint[]
+
+  @@unique([jobId, attempt])
+  @@index([jobId])
+  @@index([status])
+  @@index([workerId])
+  @@index([createdAt])
+  @@map("runtime_dispatch_attempts")
+}
+
+model RuntimeExecutionReceipt {
+  id             String   @id @default(cuid())
+  jobId           String   @unique
+  job             RuntimeDispatchJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  runtimeTokenId  String
+  runtimeToken    RuntimeExecutionToken @relation(fields: [runtimeTokenId], references: [id], onDelete: Cascade)
+  taskId          String
+  connectorId     String
+  actionType      String
+  status          String
+  targetRef       String
+  summary         String
+  resultJson      String   @default("{}")
+  startedAt       DateTime
+  completedAt     DateTime
+  correlationId   String
+  createdAt       DateTime @default(now())
+
+  @@index([runtimeTokenId])
+  @@index([taskId])
+  @@index([status])
+  @@index([connectorId])
+  @@index([actionType])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("runtime_execution_receipts")
+}
+
+model RuntimeRecoveryPoint {
+  id            String   @id @default(cuid())
+  jobId          String
+  job            RuntimeDispatchJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  attemptId      String
+  attempt        RuntimeDispatchAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  recoveryKind   String
+  snapshotJson   String   @default("{}")
+  createdAt      DateTime @default(now())
+
+  @@index([jobId])
+  @@index([attemptId])
+  @@index([recoveryKind])
+  @@index([createdAt])
+  @@map("runtime_recovery_points")
+}
+
 model DepartmentTaskIntakeRecord {
   id                             String   @id @default(cuid())
   idempotencyKey                 String?  @unique
