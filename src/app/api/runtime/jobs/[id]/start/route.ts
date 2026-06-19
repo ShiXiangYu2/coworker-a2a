@@ -1,5 +1,6 @@
 import {
   readJson,
+  requireRuntimeWorkerAuth,
   requiredString,
   runtimeExecutionErrorResponse,
   startRuntimeDispatchJob,
@@ -12,9 +13,11 @@ export async function POST(
   try {
     const { id } = await params
     const body = await readJson(request)
+    const workerId = requiredString(body.workerId, 'workerId')
+    requireRuntimeWorkerAuth(request, workerId)
     const result = await startRuntimeDispatchJob({
       id,
-      workerId: requiredString(body.workerId, 'workerId'),
+      workerId,
     })
     return Response.json({ ok: true, data: result.record, attempt: result.attempt, auditEvents: [result.auditEvent], safetyNote: result.safetyNote }, { status: 200 })
   } catch (error) {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   blockRuntimeDispatchJob,
   claimRuntimeDispatchJob,
@@ -222,7 +222,22 @@ const scope = {
   expiresAt: '2026-06-20T00:00:00.000Z',
 }
 
+const runtimeWorkerHeaders = {
+  authorization: 'Bearer test-runtime-secret',
+  'x-runtime-worker-id': 'worker-1',
+}
+
+const originalRuntimeWorkerSecret = process.env.RUNTIME_WORKER_SECRET
+
 function jsonRequest(url: string, body: unknown): Request {
+  return new Request(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...runtimeWorkerHeaders },
+    body: JSON.stringify(body),
+  })
+}
+
+function unauthenticatedJsonRequest(url: string, body: unknown): Request {
   return new Request(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -230,9 +245,42 @@ function jsonRequest(url: string, body: unknown): Request {
   })
 }
 
+function workerMismatchJsonRequest(url: string, body: unknown): Request {
+  return new Request(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      authorization: 'Bearer test-runtime-secret',
+      'x-runtime-worker-id': 'worker-2',
+    },
+    body: JSON.stringify(body),
+  })
+}
+
+function authenticatedWorkerJsonRequest(url: string, workerId: string, body: Record<string, unknown>): Request {
+  return new Request(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      authorization: 'Bearer test-runtime-secret',
+      'x-runtime-worker-id': workerId,
+    },
+    body: JSON.stringify(body),
+  })
+}
+
 describe('Sprint 22 Runtime API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    process.env.RUNTIME_WORKER_SECRET = 'test-runtime-secret'
+  })
+
+  afterEach(() => {
+    if (originalRuntimeWorkerSecret === undefined) {
+      delete process.env.RUNTIME_WORKER_SECRET
+    } else {
+      process.env.RUNTIME_WORKER_SECRET = originalRuntimeWorkerSecret
+    }
   })
 
   it('creates and lists runtime token records without execution', async () => {
@@ -364,6 +412,28 @@ describe('Sprint 22 Runtime API', () => {
     expect(claimRuntimeDispatchJob).toHaveBeenCalledWith(expect.objectContaining({ workerId: 'worker-1' }))
   })
 
+  it('rejects runtime worker requests without worker authentication', async () => {
+    const response = await claimJob(unauthenticatedJsonRequest('http://localhost/api/runtime/jobs/claim', {
+      workerId: 'worker-1',
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(401)
+    expect(body.error.message).toContain('authentication is required')
+    expect(claimRuntimeDispatchJob).not.toHaveBeenCalled()
+  })
+
+  it('rejects runtime worker requests when authenticated worker does not match body workerId', async () => {
+    const response = await startJob(workerMismatchJsonRequest('http://localhost/api/runtime/jobs/job-1/start', {
+      workerId: 'worker-1',
+    }), { params: Promise.resolve({ id: 'job-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body.error.message).toContain('does not match request workerId')
+    expect(startRuntimeDispatchJob).not.toHaveBeenCalled()
+  })
+
   it('heartbeat requires matching leaseOwner', async () => {
     const ok = await heartbeatJob(jsonRequest('http://localhost/api/runtime/jobs/job-1/heartbeat', {
       workerId: 'worker-1',
@@ -372,7 +442,7 @@ describe('Sprint 22 Runtime API', () => {
     expect(ok.status).toBe(200)
     expect(heartbeatRuntimeDispatchJob).toHaveBeenCalledWith(expect.objectContaining({ id: 'job-1', workerId: 'worker-1' }))
 
-    const conflict = await heartbeatJob(jsonRequest('http://localhost/api/runtime/jobs/job-1/heartbeat', {
+    const conflict = await heartbeatJob(authenticatedWorkerJsonRequest('http://localhost/api/runtime/jobs/job-1/heartbeat', 'wrong-worker', {
       workerId: 'wrong-worker',
     }), { params: Promise.resolve({ id: 'job-1' }) })
     expect(conflict.status).toBe(409)
@@ -446,7 +516,7 @@ describe('Sprint 22 Runtime API', () => {
     }), { params: Promise.resolve({ id: 'not-running' }) })
     expect(notRunning.status).toBe(409)
 
-    const wrongLease = await completeDryRunJob(jsonRequest('http://localhost/api/runtime/jobs/job-1/complete-dry-run', {
+    const wrongLease = await completeDryRunJob(authenticatedWorkerJsonRequest('http://localhost/api/runtime/jobs/job-1/complete-dry-run', 'wrong-worker', {
       workerId: 'wrong-worker',
     }), { params: Promise.resolve({ id: 'job-1' }) })
     expect(wrongLease.status).toBe(409)
@@ -483,7 +553,7 @@ describe('Sprint 22 Runtime API', () => {
     }), { params: Promise.resolve({ id: 'wrong-connector' }) })
     expect(wrongConnector.status).toBe(409)
 
-    const wrongLease = await completeObsidianWriteJob(jsonRequest('http://localhost/api/runtime/jobs/job-1/complete-obsidian-write', {
+    const wrongLease = await completeObsidianWriteJob(authenticatedWorkerJsonRequest('http://localhost/api/runtime/jobs/job-1/complete-obsidian-write', 'wrong-worker', {
       workerId: 'wrong-worker',
       execute: true,
     }), { params: Promise.resolve({ id: 'job-1' }) })

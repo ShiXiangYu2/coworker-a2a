@@ -60,6 +60,39 @@ export function runtimeExecutionErrorResponse(error: unknown) {
   return Response.json({ ok: false, error: { code: 'unexpected_error', message: 'Unexpected Sprint 22 runtime execution API error.' } }, { status: 500 })
 }
 
+function runtimeWorkerSecretFrom(request: Request): string | undefined {
+  const auth = request.headers.get('authorization')?.trim()
+  if (auth?.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim()
+  return request.headers.get('x-runtime-worker-secret')?.trim() || undefined
+}
+
+function sameSecret(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
+}
+
+export function requireRuntimeWorkerAuth(request: Request, workerId: string): void {
+  const expectedSecret = process.env.RUNTIME_WORKER_SECRET?.trim()
+  if (!expectedSecret) {
+    throw new RuntimeExecutionApiError('Runtime worker secret is not configured.', 503)
+  }
+
+  const providedSecret = runtimeWorkerSecretFrom(request)
+  if (!providedSecret || !sameSecret(providedSecret, expectedSecret)) {
+    throw new RuntimeExecutionApiError('Runtime worker authentication is required.', 401)
+  }
+
+  const authenticatedWorkerId = request.headers.get('x-runtime-worker-id')?.trim()
+  if (!authenticatedWorkerId) {
+    throw new RuntimeExecutionApiError('x-runtime-worker-id header is required.', 401)
+  }
+  if (authenticatedWorkerId !== workerId) {
+    throw new RuntimeExecutionApiError('Authenticated runtime worker does not match request workerId.', 403)
+  }
+}
+
 export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
