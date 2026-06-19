@@ -32,13 +32,6 @@ Code quality analysis completed. Lint and typecheck passed.
 > eslint
 
 
-D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\lib\tools\engine.ts
-  21:10  warning  'createHash' is defined but never used           @typescript-eslint/no-unused-vars
-  36:3   warning  'ToolSideEffectClass' is defined but never used  @typescript-eslint/no-unused-vars
-
-✖ 2 problems (0 errors, 2 warnings)
-
-
 ```
 
 ### TypeCheck 输出

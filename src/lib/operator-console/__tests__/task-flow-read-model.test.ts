@@ -135,6 +135,10 @@ describe('operator task flow read model', () => {
         phase: 'execution',
         source: 'runtime',
       },
+      navigation: {
+        taskFlowHref: '/operator?taskFlowTaskId=task-1#task-flow',
+        runtimeHref: '/operator?runtimeTaskId=task-1#runtime',
+      },
     })
     expect(flows[0].nodes.map((node) => node.type)).toEqual([
       'task',
@@ -144,5 +148,19 @@ describe('operator task flow read model', () => {
       'runtime_receipt',
       'audit',
     ])
+    expect(flows[0].nodes.find((node) => node.id === 'runtime-job-1')).toMatchObject({
+      navigation: {
+        taskFlowHref: '/operator?taskFlowTaskId=task-1&taskFlowNodeId=runtime-job-1#task-flow',
+        runtimeHref: '/operator?runtimeTaskId=task-1&runtimeSection=summary#runtime',
+        runtimeSection: 'summary',
+      },
+    })
+    expect(flows[0].nodes.find((node) => node.id === 'receipt-1')).toMatchObject({
+      navigation: {
+        taskFlowHref: '/operator?taskFlowTaskId=task-1&taskFlowNodeId=receipt-1#task-flow',
+        runtimeHref: '/operator?runtimeTaskId=task-1&runtimeSection=latest-receipt#runtime',
+        runtimeSection: 'latest-receipt',
+      },
+    })
   })
 })

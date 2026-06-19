@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { EmptyState, ErrorState, LoadingState, PanelShell, StatusBadge } from './ui'
 import type {
   OperatorTaskFlowNode,
@@ -29,7 +30,13 @@ const nodeClasses: Record<OperatorTaskFlowNode['type'], string> = {
   audit: 'border-gray-200 bg-gray-50',
 }
 
-export function MultiAgentFlow() {
+export function MultiAgentFlow({
+  highlightedTaskId,
+  highlightedNodeId,
+}: {
+  highlightedTaskId?: string
+  highlightedNodeId?: string
+}) {
   const [flows, setFlows] = useState<OperatorTaskFlowReadModel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,37 +72,59 @@ export function MultiAgentFlow() {
   }, [fetchTaskFlows])
 
   if (loading) {
-    return <LoadingState label="Loading structured task flows..." />
+    return <LoadingState label="正在读取结构化任务流..." />
   }
 
   if (error) {
-    return <ErrorState message={`Task flows unavailable: ${error}`} />
+    return <ErrorState message={`Task Flow 暂不可用：${error}`} />
   }
 
   return (
     <PanelShell
-      title="Multi-Agent Task Flow"
-      description={`${flows.length} recent structured task flow records. This view is read-only and does not start, claim, retry, approve, or complete any work.`}
+      title="结构化任务流 Task Flow"
+      description={`当前展示 ${flows.length} 个最近的结构化任务流。本视图只读，不启动、认领、重试、审批或完成任何任务。`}
     >
       <div className="max-h-96 overflow-y-auto p-4">
         {flows.length === 0 ? (
           <EmptyState
-            title="No structured task flows yet"
-            description="When Harmony tasks, AgentRuns, runtime jobs, receipts, workflow proposals, or audit events exist, they will appear here as a read-only flow."
+            title="暂无结构化任务流"
+            description="当 Harmony task、AgentRun、runtime job、receipt、workflow proposal 或 audit event 存在后，这里会以只读任务流展示。"
           />
         ) : (
           <div className="space-y-4">
-            {flows.map((flow) => (
-              <article key={flow.taskId} className="rounded-lg border border-gray-200 p-3">
+            {flows.map((flow) => {
+              const highlighted = highlightedTaskId === flow.taskId
+              return (
+              <article
+                key={flow.taskId}
+                className={`rounded-lg border p-3 ${
+                  highlighted
+                    ? 'border-sky-300 bg-sky-50/60 ring-2 ring-sky-100'
+                    : 'border-gray-200 bg-white'
+                }`}
+              >
                 <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="truncate text-sm font-semibold text-gray-900">{flow.title}</h3>
                       <StatusBadge status={flow.lifecycle.phase} />
+                      {highlighted && (
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">
+                          当前定位任务
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
                       Task {flow.taskId} | {flow.status} | {flow.lifecycle.reason}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs font-medium">
+                      <Link href={flow.navigation.taskFlowHref} className="text-sky-700 hover:text-sky-900">
+                        任务流定位
+                      </Link>
+                      <Link href={flow.navigation.runtimeHref} className="text-sky-700 hover:text-sky-900">
+                        运行态视图
+                      </Link>
+                    </div>
                   </div>
                   <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
                     {flow.nodes.length} nodes
@@ -104,11 +133,16 @@ export function MultiAgentFlow() {
 
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {flow.nodes.map((node) => (
-                    <TaskFlowNodeCard key={`${node.type}-${node.id}`} node={node} />
+                    <TaskFlowNodeCard
+                      key={`${node.type}-${node.id}`}
+                      node={node}
+                      highlighted={highlightedNodeId === node.id}
+                    />
                   ))}
                 </div>
               </article>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -116,13 +150,32 @@ export function MultiAgentFlow() {
   )
 }
 
-function TaskFlowNodeCard({ node }: { node: OperatorTaskFlowNode }) {
+function TaskFlowNodeCard({
+  node,
+  highlighted,
+}: {
+  node: OperatorTaskFlowNode
+  highlighted: boolean
+}) {
   const metaEntries = Object.entries(node.meta ?? {}).filter(([, value]) => value !== null && value !== '')
 
   return (
-    <div className={`min-w-0 rounded-lg border px-3 py-2 text-xs ${nodeClasses[node.type]}`}>
+    <div
+      className={`min-w-0 rounded-lg border px-3 py-2 text-xs ${
+        highlighted
+          ? 'border-sky-300 ring-2 ring-sky-100'
+          : nodeClasses[node.type]
+      }`}
+    >
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="font-semibold text-gray-900">{nodeLabels[node.type]}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-gray-900">{nodeLabels[node.type]}</span>
+          {highlighted && (
+            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-700">
+              当前定位节点
+            </span>
+          )}
+        </div>
         <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 font-medium text-gray-600">
           {node.status}
         </span>
@@ -143,6 +196,13 @@ function TaskFlowNodeCard({ node }: { node: OperatorTaskFlowNode }) {
             </div>
           ))}
         </dl>
+      )}
+      {node.navigation?.runtimeHref && (
+        <div className="mt-2 text-[11px] font-medium">
+          <Link href={node.navigation.runtimeHref} className="text-sky-700 hover:text-sky-900">
+            查看运行态区块
+          </Link>
+        </div>
       )}
     </div>
   )

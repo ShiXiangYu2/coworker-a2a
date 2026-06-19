@@ -12,6 +12,10 @@ export interface OperatorOverviewRuntimeItem {
   status: string
   createdAt?: string
   summary?: string
+  navigation: {
+    taskFlowHref: string
+    runtimeHref: string
+  }
 }
 
 export interface OperatorOverviewBlockedItem {
@@ -23,6 +27,10 @@ export interface OperatorOverviewBlockedItem {
   status: string
   reason?: string
   createdAt?: string
+  navigation: {
+    taskFlowHref: string
+    runtimeHref?: string
+  }
 }
 
 export interface OperatorOverviewReceiptItem {
@@ -33,6 +41,10 @@ export interface OperatorOverviewReceiptItem {
   status: string
   summary?: string
   createdAt?: string
+  navigation: {
+    taskFlowHref: string
+    runtimeHref: string
+  }
 }
 
 export interface OperatorOverviewReadModel {
@@ -119,6 +131,10 @@ function collectActiveRuntime(flows: OperatorTaskFlowReadModel[]): OperatorOverv
           status: node.status,
           summary: node.summary,
           createdAt: node.createdAt,
+          navigation: {
+            taskFlowHref: node.navigation?.taskFlowHref ?? flow.navigation.taskFlowHref,
+            runtimeHref: node.navigation?.runtimeHref ?? flow.navigation.runtimeHref,
+          },
         }))
     )
   )
@@ -137,6 +153,10 @@ function collectBlockedSignals(flows: OperatorTaskFlowReadModel[]): OperatorOver
         title: 'Lifecycle repair signal',
         status: flow.lifecycle.phase,
         reason: flow.lifecycle.reason,
+        navigation: {
+          taskFlowHref: flow.navigation.taskFlowHref,
+          runtimeHref: withRuntimeSection(flow.navigation.runtimeHref, 'blocked-signal'),
+        },
       })
     }
 
@@ -162,6 +182,12 @@ function collectBlockedSignals(flows: OperatorTaskFlowReadModel[]): OperatorOver
         status: node.status,
         reason: node.summary,
         createdAt: node.createdAt,
+        navigation: {
+          taskFlowHref: node.navigation?.taskFlowHref ?? flow.navigation.taskFlowHref,
+          ...(node.type === 'runtime_job'
+            ? { runtimeHref: node.navigation?.runtimeHref ?? withRuntimeSection(flow.navigation.runtimeHref, 'blocked-signal') }
+            : {}),
+        },
       })
     }
   }
@@ -182,6 +208,10 @@ function collectRecentReceipts(flows: OperatorTaskFlowReadModel[]): OperatorOver
           status: node.status,
           summary: node.summary,
           createdAt: node.createdAt,
+          navigation: {
+            taskFlowHref: node.navigation?.taskFlowHref ?? flow.navigation.taskFlowHref,
+            runtimeHref: node.navigation?.runtimeHref ?? withRuntimeSection(flow.navigation.runtimeHref, 'latest-receipt'),
+          },
         }))
     )
   )
@@ -212,4 +242,10 @@ function timeValue(value: string | undefined): number {
   if (!value) return 0
   const time = new Date(value).getTime()
   return Number.isFinite(time) ? time : 0
+}
+
+function withRuntimeSection(href: string, section: string): string {
+  const [pathAndQuery, hash = 'runtime'] = href.split('#')
+  const separator = pathAndQuery.includes('?') ? '&' : '?'
+  return `${pathAndQuery}${separator}runtimeSection=${encodeURIComponent(section)}#${hash}`
 }

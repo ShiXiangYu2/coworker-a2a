@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import Link from 'next/link'
 import { EmptyState, ErrorState, PanelShell, SafetyNote, StatusBadge } from './ui'
 import type {
   OperatorOverviewBlockedItem,
@@ -38,7 +39,7 @@ const emptyOverview: OperatorOverviewReadModel = {
   },
   recentFlows: [],
   safetyNote:
-    'Operator Overview is a read-only derived view. It does not change execution state.',
+    'Operator Overview 是只读派生视图，只汇总现有记录，不改变执行状态。',
 }
 
 export function OperatorOverview() {
@@ -90,7 +91,7 @@ export function OperatorOverview() {
     return (
       <PanelShell
         title="Operator Overview"
-        description="Loading structured read-only operator overview..."
+        description="正在读取结构化只读总览..."
       >
         <div className="p-4">
           <div className="h-2 w-40 animate-pulse rounded bg-gray-200" />
@@ -101,7 +102,7 @@ export function OperatorOverview() {
   }
 
   if (error) {
-    return <ErrorState message={`Operator overview unavailable: ${error}`} />
+    return <ErrorState message={`Operator Overview 暂不可用：${error}`} />
   }
 
   return (
@@ -111,28 +112,28 @@ export function OperatorOverview() {
       <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
         <aside className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
           <div className="text-xs font-semibold uppercase text-gray-500">
-            Current Flow
+            当前任务流
           </div>
           <h2 className="mt-2 break-words text-lg font-semibold text-gray-950">
-            {latestFlow?.title ?? 'No task flow yet'}
+            {latestFlow?.title ?? '暂无任务流'}
           </h2>
           <p className="mt-2 break-words text-sm leading-6 text-gray-600">
             {latestFlow
               ? `${latestFlow.status} / ${latestFlow.lifecycle.phase}: ${latestFlow.lifecycle.reason}`
-              : 'Structured task flows will appear here after Harmony tasks and runtime records exist.'}
+              : '当 Harmony task 与 runtime 记录存在后，这里会展示结构化任务流摘要。'}
           </p>
 
           <div className="mt-5 grid grid-cols-2 gap-2 text-sm">
-            <Metric label="Task flows" value={data.totals.taskFlows} />
-            <Metric label="Agent runs" value={data.totals.agentRuns} />
-            <Metric label="Runtime jobs" value={data.totals.runtimeJobs} />
-            <Metric label="Receipts" value={data.totals.runtimeReceipts} />
+            <Metric label="任务流" value={data.totals.taskFlows} />
+            <Metric label="AgentRun" value={data.totals.agentRuns} />
+            <Metric label="Runtime Job" value={data.totals.runtimeJobs} />
+            <Metric label="Receipt" value={data.totals.runtimeReceipts} />
           </div>
 
           <div className="mt-5 rounded-md bg-gray-50 p-3 text-xs leading-5 text-gray-600">
-            Generated at
+            生成时间
             <span className="block break-words font-medium text-gray-900">
-              {latestGeneratedAt ?? 'No records yet'}
+              {latestGeneratedAt ?? '暂无记录'}
             </span>
           </div>
         </aside>
@@ -140,13 +141,13 @@ export function OperatorOverview() {
         <div className="space-y-4">
           <SummaryPanel
             title="Active Runtime"
-            description="Queued, leased, or running runtime jobs derived from structured task flows."
+            description="从结构化任务流派生的 queued、leased 或 running runtime job。"
             count={data.activeRuntime.count}
           >
             {data.activeRuntime.items.length === 0 ? (
               <EmptyState
                 title="No active runtime"
-                description="No queued, leased, or running runtime jobs are present in the current read-only overview."
+                description="当前只读总览中没有 queued、leased 或 running runtime job。"
               />
             ) : (
               <div className="grid gap-2 md:grid-cols-2">
@@ -159,13 +160,13 @@ export function OperatorOverview() {
 
           <SummaryPanel
             title="Blocked Summary"
-            description="Blocked or failed signals from task, AgentRun, runtime, repair lifecycle, or audit records."
+            description="来自 task、AgentRun、runtime、repair lifecycle 或 audit 记录的 blocked / failed 信号。"
             count={data.blockedSummary.count}
           >
             {data.blockedSummary.items.length === 0 ? (
               <EmptyState
                 title="No blocked signals"
-                description="No blocked, failed, or repair-lifecycle records are present in the current overview."
+                description="当前总览中没有 blocked、failed 或 repair lifecycle 记录。"
               />
             ) : (
               <div className="space-y-2">
@@ -178,13 +179,13 @@ export function OperatorOverview() {
 
           <SummaryPanel
             title="Recent Receipts"
-            description="Most recent runtime receipts, sorted by receipt time."
+            description="按 receipt 时间倒序展示最近的 runtime receipt。"
             count={data.recentReceipts.count}
           >
             {data.recentReceipts.items.length === 0 ? (
               <EmptyState
                 title="No receipts yet"
-                description="Runtime receipts will appear here after dry-run or scoped runtime completion records exist."
+                description="当 dry-run 或限定运行态完成记录存在后，这里会展示 runtime receipt。"
               />
             ) : (
               <div className="grid gap-2 md:grid-cols-2">
@@ -199,15 +200,15 @@ export function OperatorOverview() {
         <aside className="space-y-4">
           <PanelShell
             title="Read-only Boundary"
-            description="Overview renders derived state only. It exposes no worker, connector, permission, or mutation controls."
+            description="Overview 只渲染派生状态，不暴露 worker、connector、permission 或 mutation 控制。"
           >
             <div className="p-4">
               <div className="grid gap-2">
                 {[
-                  'Derived from existing task-flow records',
-                  'No runtime state transitions',
-                  'No database schema changes',
-                  'No execution controls',
+                  '仅派生自现有任务流记录',
+                  '不触发运行态状态流转',
+                  '不变更数据库结构',
+                  '不提供执行控制',
                 ].map((item) => (
                   <div key={item} className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
                     {item}
@@ -219,13 +220,13 @@ export function OperatorOverview() {
 
           <PanelShell
             title="Recent Task Flows"
-            description={`${data.recentFlows.length} structured flows are included in this overview response.`}
+            description={`当前总览响应包含 ${data.recentFlows.length} 个结构化任务流。`}
           >
             <div className="max-h-80 overflow-y-auto p-4">
               {data.recentFlows.length === 0 ? (
                 <EmptyState
                   title="No recent task flows"
-                  description="Task flow summaries will appear after structured operator records are available."
+                  description="当结构化 operator 记录可用后，这里会展示任务流摘要。"
                 />
               ) : (
                 <div className="space-y-3">
@@ -290,6 +291,14 @@ function RuntimeItemCard({ item }: { item: OperatorOverviewRuntimeItem }) {
         <StatusBadge status={item.status} />
       </div>
       <p className="mt-2 break-words leading-5 text-gray-600">{item.taskTitle}</p>
+      <div className="mt-2 flex flex-wrap gap-3 text-[11px] font-medium">
+        <Link href={item.navigation.taskFlowHref} className="text-sky-700 hover:text-sky-900">
+          查看任务流
+        </Link>
+        <Link href={item.navigation.runtimeHref} className="text-sky-700 hover:text-sky-900">
+          查看运行态
+        </Link>
+      </div>
       {item.createdAt && <p className="mt-2 text-gray-500">{formatTimestamp(item.createdAt)}</p>}
     </div>
   )
@@ -304,6 +313,16 @@ function BlockedItemRow({ item }: { item: OperatorOverviewBlockedItem }) {
           <div className="mt-1 text-gray-500">{item.source} / {item.taskTitle}</div>
         </div>
         <StatusBadge status={item.status} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-3 text-[11px] font-medium">
+        <Link href={item.navigation.taskFlowHref} className="text-sky-700 hover:text-sky-900">
+          查看任务流
+        </Link>
+        {item.navigation.runtimeHref && (
+          <Link href={item.navigation.runtimeHref} className="text-sky-700 hover:text-sky-900">
+            查看运行态
+          </Link>
+        )}
       </div>
       {item.reason && <p className="mt-2 break-words leading-5 text-gray-600">{item.reason}</p>}
     </div>
@@ -320,6 +339,14 @@ function ReceiptItemCard({ item }: { item: OperatorOverviewReceiptItem }) {
       <p className="mt-2 break-words leading-5 text-gray-600">
         {item.summary ?? item.taskTitle}
       </p>
+      <div className="mt-2 flex flex-wrap gap-3 text-[11px] font-medium">
+        <Link href={item.navigation.taskFlowHref} className="text-sky-700 hover:text-sky-900">
+          查看任务流
+        </Link>
+        <Link href={item.navigation.runtimeHref} className="text-sky-700 hover:text-sky-900">
+          查看运行态
+        </Link>
+      </div>
       {item.createdAt && <p className="mt-2 text-gray-500">{formatTimestamp(item.createdAt)}</p>}
     </div>
   )

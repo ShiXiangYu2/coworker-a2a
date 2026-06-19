@@ -3,17 +3,19 @@
 import { useEffect, useState } from 'react'
 import { EmptyState, LoadingState, PanelShell, RecordMeta, SafetyNote, StatusBadge } from './ui'
 
-interface ToolBoundaryRecord {
-  id: string
-  toolName?: string
-  toolId?: string
-  status: string
-  riskLevel?: string
-  createdAt: string
+interface ToolCallBundle {
+  toolCall: {
+    id: string
+    toolName?: string
+    toolId?: string
+    status: string
+    riskLevel?: string
+    createdAt: string
+  }
 }
 
 export function ToolBoundaryPanel() {
-  const [records, setRecords] = useState<ToolBoundaryRecord[]>([])
+  const [records, setRecords] = useState<ToolCallBundle[]>([])
   const [loading, setLoading] = useState(true)
 
   async function fetchRecords() {
@@ -54,18 +56,18 @@ export function ToolBoundaryPanel() {
           />
         ) : (
           <div className="divide-y divide-gray-100">
-            {records.map((item) => (
-              <div key={item.id} className="px-4 py-3">
+            {records.map((bundle) => (
+              <div key={bundle.toolCall.id} className="px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="break-words text-sm font-medium text-gray-900">
-                      {item.toolName ?? item.toolId ?? item.id}
+                      {bundle.toolCall.toolName ?? bundle.toolCall.toolId ?? bundle.toolCall.id}
                     </div>
                     <RecordMeta>
-                      风险等级：{item.riskLevel ?? 'local_record'} / {new Date(item.createdAt).toLocaleString()}
+                      风险等级：{bundle.toolCall.riskLevel ?? 'local_record'} / {new Date(bundle.toolCall.createdAt).toLocaleString()}
                     </RecordMeta>
                   </div>
-                  <StatusBadge status={item.status} />
+                  <StatusBadge status={bundle.toolCall.status} />
                 </div>
               </div>
             ))}

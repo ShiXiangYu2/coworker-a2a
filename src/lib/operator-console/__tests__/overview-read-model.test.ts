@@ -12,6 +12,10 @@ const flows: OperatorTaskFlowReadModel[] = [
       source: 'runtime',
       reason: 'Latest runtime job is running.',
     },
+    navigation: {
+      taskFlowHref: '/operator?taskFlowTaskId=task-1#task-flow',
+      runtimeHref: '/operator?runtimeTaskId=task-1#runtime',
+    },
     nodes: [
       {
         id: 'task-1',
@@ -34,6 +38,11 @@ const flows: OperatorTaskFlowReadModel[] = [
         status: 'running',
         summary: 'Runtime dispatch job read-only status.',
         createdAt: '2026-06-19T01:02:00.000Z',
+        navigation: {
+          taskFlowHref: '/operator?taskFlowTaskId=task-1&taskFlowNodeId=runtime-job-1#task-flow',
+          runtimeHref: '/operator?runtimeTaskId=task-1&runtimeSection=summary#runtime',
+          runtimeSection: 'summary',
+        },
       },
       {
         id: 'receipt-1',
@@ -42,6 +51,11 @@ const flows: OperatorTaskFlowReadModel[] = [
         status: 'dry_run',
         summary: 'Dry-run receipt recorded.',
         createdAt: '2026-06-19T01:03:00.000Z',
+        navigation: {
+          taskFlowHref: '/operator?taskFlowTaskId=task-1&taskFlowNodeId=receipt-1#task-flow',
+          runtimeHref: '/operator?runtimeTaskId=task-1&runtimeSection=latest-receipt#runtime',
+          runtimeSection: 'latest-receipt',
+        },
       },
     ],
   },
@@ -53,6 +67,10 @@ const flows: OperatorTaskFlowReadModel[] = [
       phase: 'repair',
       source: 'runtime',
       reason: 'A blocked runtime record requires repair.',
+    },
+    navigation: {
+      taskFlowHref: '/operator?taskFlowTaskId=task-2#task-flow',
+      runtimeHref: '/operator?runtimeTaskId=task-2#runtime',
     },
     nodes: [
       {
@@ -78,6 +96,11 @@ const flows: OperatorTaskFlowReadModel[] = [
         status: 'blocked',
         summary: 'Runtime dispatch job blocked.',
         createdAt: '2026-06-19T02:02:00.000Z',
+        navigation: {
+          taskFlowHref: '/operator?taskFlowTaskId=task-2&taskFlowNodeId=runtime-job-2#task-flow',
+          runtimeHref: '/operator?runtimeTaskId=task-2&runtimeSection=blocked-signal#runtime',
+          runtimeSection: 'blocked-signal',
+        },
       },
       {
         id: 'audit-1',
@@ -107,6 +130,10 @@ describe('operator overview read model', () => {
         id: 'runtime-job-1',
         taskId: 'task-1',
         status: 'running',
+        navigation: {
+          taskFlowHref: '/operator?taskFlowTaskId=task-1&taskFlowNodeId=runtime-job-1#task-flow',
+          runtimeHref: '/operator?runtimeTaskId=task-1&runtimeSection=summary#runtime',
+        },
       }),
     ])
     expect(overview.blockedSummary.items.map((item) => item.source)).toEqual([
@@ -120,8 +147,18 @@ describe('operator overview read model', () => {
       expect.objectContaining({
         id: 'receipt-1',
         status: 'dry_run',
+        navigation: {
+          taskFlowHref: '/operator?taskFlowTaskId=task-1&taskFlowNodeId=receipt-1#task-flow',
+          runtimeHref: '/operator?runtimeTaskId=task-1&runtimeSection=latest-receipt#runtime',
+        },
       }),
     ])
+    expect(overview.blockedSummary.items.find((item) => item.id === 'runtime-job-2')).toMatchObject({
+      navigation: {
+        taskFlowHref: '/operator?taskFlowTaskId=task-2&taskFlowNodeId=runtime-job-2#task-flow',
+        runtimeHref: '/operator?runtimeTaskId=task-2&runtimeSection=blocked-signal#runtime',
+      },
+    })
     expect(overview.safetyNote).toContain('read-only derived view')
   })
 })

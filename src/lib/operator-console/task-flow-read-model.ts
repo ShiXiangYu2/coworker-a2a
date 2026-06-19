@@ -16,6 +16,17 @@ export type OperatorTaskFlowNodeType =
   | 'runtime_receipt'
   | 'audit'
 
+export type OperatorRuntimeSection =
+  | 'summary'
+  | 'latest-receipt'
+  | 'blocked-signal'
+
+export interface OperatorTaskFlowNodeNavigation {
+  taskFlowHref: string
+  runtimeHref?: string
+  runtimeSection?: OperatorRuntimeSection
+}
+
 export interface OperatorTaskFlowNode {
   id: string
   type: OperatorTaskFlowNodeType
@@ -24,6 +35,7 @@ export interface OperatorTaskFlowNode {
   summary?: string
   createdAt?: string
   meta?: Record<string, string | number | boolean | null>
+  navigation?: OperatorTaskFlowNodeNavigation
 }
 
 export interface OperatorTaskFlowReadModel {
@@ -31,6 +43,10 @@ export interface OperatorTaskFlowReadModel {
   title: string
   status: string
   lifecycle: DerivedTaskLifecycle
+  navigation: {
+    taskFlowHref: string
+    runtimeHref: string
+  }
   nodes: OperatorTaskFlowNode[]
 }
 
@@ -169,7 +185,11 @@ async function buildOperatorTaskFlow(taskId: string): Promise<OperatorTaskFlowRe
     title: task?.title ?? taskId,
     status: task?.status ?? runtimeSummary.taskStatus ?? 'unknown',
     lifecycle,
-    nodes: sortNodes(nodes),
+    navigation: {
+      taskFlowHref: `/operator?taskFlowTaskId=${encodeURIComponent(taskId)}#task-flow`,
+      runtimeHref: `/operator?runtimeTaskId=${encodeURIComponent(taskId)}#runtime`,
+    },
+    nodes: sortNodes(nodes).map((node) => withNodeNavigation(taskId, node)),
   }
 }
 
@@ -210,6 +230,44 @@ function timeValue(value: string | undefined): number {
 function toIsoString(value: Date | string | null | undefined): string | undefined {
   if (!value) return undefined
   return value instanceof Date ? value.toISOString() : value
+}
+
+function withNodeNavigation(
+  taskId: string,
+  node: OperatorTaskFlowNode
+): OperatorTaskFlowNode {
+  const runtimeSection = runtimeSectionForNode(node)
+  return {
+    ...node,
+    navigation: {
+      taskFlowHref: buildTaskFlowNodeHref(taskId, node.id),
+      ...(runtimeSection
+        ? {
+            runtimeHref: buildRuntimeHref(taskId, runtimeSection),
+            runtimeSection,
+          }
+        : {}),
+    },
+  }
+}
+
+function runtimeSectionForNode(
+  node: OperatorTaskFlowNode
+): OperatorRuntimeSection | undefined {
+  if (node.type === 'runtime_receipt') return 'latest-receipt'
+  if (node.type !== 'runtime_job') return undefined
+
+  const status = node.status.toLowerCase()
+  if (status === 'blocked' || status === 'failed') return 'blocked-signal'
+  return 'summary'
+}
+
+function buildTaskFlowNodeHref(taskId: string, nodeId: string): string {
+  return `/operator?taskFlowTaskId=${encodeURIComponent(taskId)}&taskFlowNodeId=${encodeURIComponent(nodeId)}#task-flow`
+}
+
+function buildRuntimeHref(taskId: string, section: OperatorRuntimeSection): string {
+  return `/operator?runtimeTaskId=${encodeURIComponent(taskId)}&runtimeSection=${encodeURIComponent(section)}#runtime`
 }
 
 function clampLimit(value: number | undefined): number {

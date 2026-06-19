@@ -18,7 +18,6 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { createHash } from 'node:crypto'
 import {
   validateExecutionPreconditions,
   validateToolResult,
@@ -33,7 +32,6 @@ import type {
   ToolPermission,
   ToolResult,
   ToolRun,
-  ToolSideEffectClass,
 } from './types'
 
 // ─── 类型定义 ──────────────────────────────────────────────────────

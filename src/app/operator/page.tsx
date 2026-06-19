@@ -15,21 +15,22 @@ import {
   TaskBoard,
   ToolBoundaryPanel,
 } from '@/components/operator-console'
+import type { RuntimeExecutionHighlightedSection } from '@/components/operator-console'
 
 const closureStages = [
-  'Evidence Sandbox',
-  'Department Profiles',
-  'Evidence Mapping',
-  'Execution Gateway',
-  'Assignment Review',
-  'Runtime Read-only View',
+  '证据沙箱',
+  '部门画像',
+  '证据映射',
+  '执行网关',
+  '分配复核',
+  '运行态只读视图',
 ]
 
 const consoleSections = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'task-flow', label: 'Task Flow' },
-  { id: 'runtime', label: 'Runtime' },
-  { id: 'governance', label: 'Governance Ledger' },
+  { id: 'overview', label: '总览 Overview' },
+  { id: 'task-flow', label: '任务流 Task Flow' },
+  { id: 'runtime', label: '运行态 Runtime' },
+  { id: 'governance', label: '治理账本 Governance Ledger' },
 ]
 
 function stringSearchParam(value: string | string[] | undefined): string | undefined {
@@ -37,12 +38,35 @@ function stringSearchParam(value: string | string[] | undefined): string | undef
   return undefined
 }
 
+function runtimeSectionParam(
+  value: string | string[] | undefined
+): RuntimeExecutionHighlightedSection | undefined {
+  const section = stringSearchParam(value)
+  if (
+    section === 'summary' ||
+    section === 'latest-receipt' ||
+    section === 'blocked-signal'
+  ) {
+    return section
+  }
+  return undefined
+}
+
 export default async function OperatorConsole({
   searchParams,
 }: {
-  searchParams: Promise<{ runtimeTaskId?: string | string[] | undefined }>
+  searchParams: Promise<{
+    runtimeTaskId?: string | string[] | undefined
+    taskFlowTaskId?: string | string[] | undefined
+    taskFlowNodeId?: string | string[] | undefined
+    runtimeSection?: string | string[] | undefined
+  }>
 }) {
-  const runtimeTaskId = stringSearchParam((await searchParams).runtimeTaskId)
+  const resolvedSearchParams = await searchParams
+  const runtimeTaskId = stringSearchParam(resolvedSearchParams.runtimeTaskId)
+  const taskFlowTaskId = stringSearchParam(resolvedSearchParams.taskFlowTaskId)
+  const taskFlowNodeId = stringSearchParam(resolvedSearchParams.taskFlowNodeId)
+  const runtimeSection = runtimeSectionParam(resolvedSearchParams.runtimeSection)
 
   return (
     <main className="min-h-screen bg-gray-100 text-gray-950">
@@ -56,13 +80,13 @@ export default async function OperatorConsole({
               Operator Console
             </h1>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-600">
-              Local governance control surface for Task, Agent, Tool, Workflow, Evidence,
-              Department, Execution Gateway, Assignment Review, and Sprint 22 runtime read-only records.
+              本地治理控制台，用于查看 Task、Agent、Tool、Workflow、Evidence、Department、
+              Execution Gateway、Assignment Review 与 Sprint 22 runtime 只读记录。
             </p>
           </div>
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
-            <div className="font-semibold text-amber-950">v1 Safety Boundary</div>
-            <div>local-only / human-gated / evidence-only / recommendation-only</div>
+            <div className="font-semibold text-amber-950">v1 只读安全边界</div>
+            <div>本地记录 / 人工门控 / 证据优先 / 建议只读</div>
           </div>
         </div>
       </header>
@@ -85,10 +109,9 @@ export default async function OperatorConsole({
         <section className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-gray-950">Sprint 1-22 staged closure</h2>
+              <h2 className="text-sm font-semibold text-gray-950">Sprint 1-22 分阶段收口</h2>
               <p className="mt-1 text-xs leading-5 text-gray-500">
-                Reviews and approvals change only individual local records. They do not grant routing,
-                assignment, runtime permission, release, deployment, or task completion.
+                复核与审批只改变本地记录，不授予路由、分配、运行态权限、发布、部署或任务完成能力。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -106,49 +129,55 @@ export default async function OperatorConsole({
 
         <section id="overview" className="scroll-mt-16 space-y-3">
           <SectionHeader
-            title="Overview"
-            description="HARNESS-style local governance overview. This view remains read-only and does not issue runtime permission."
+            title="总览 Overview"
+            description="本地治理总览，只渲染结构化派生状态，不签发运行态权限。"
           />
           <OperatorOverview />
         </section>
 
         <section id="task-flow" className="scroll-mt-16 space-y-4">
           <SectionHeader
-            title="Task Flow"
-            description="Local task, agent, and collaboration records grouped as a production flow. Existing data sources are unchanged in this sprint slice."
+            title="任务流 Task Flow"
+            description="按生产链路聚合本地 task、agent、workflow、runtime、receipt 与 audit 记录；本阶段不改变数据来源。"
           />
           <div className="grid gap-4 xl:grid-cols-2">
             <TaskBoard />
             <AgentStats />
             <div className="xl:col-span-2">
-              <MultiAgentFlow />
+              <MultiAgentFlow
+                highlightedTaskId={taskFlowTaskId}
+                highlightedNodeId={taskFlowNodeId}
+              />
             </div>
           </div>
         </section>
 
         <section id="runtime" className="scroll-mt-16 space-y-4">
           <SectionHeader
-            title="Runtime"
-            description="Sprint 22 runtime status view. It displays scoped runtime records only and exposes no worker, token issuance, connector, or mutation controls."
+            title="运行态 Runtime"
+            description="Sprint 22 单任务运行态只读视图，只展示限定记录，不暴露 worker、token、connector 或 mutation 控制。"
           />
           <div className="grid gap-4">
             <ExecutionGatewayPanel />
             <div className="space-y-3">
               <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                <div className="text-sm font-semibold text-gray-950">Runtime Execution Task Filter</div>
+                <div className="text-sm font-semibold text-gray-950">运行态任务过滤</div>
                 <p className="mt-1 break-words text-sm text-gray-600">
                   {runtimeTaskId ? (
-                    <>Showing Sprint 22 read-only runtime view for task {runtimeTaskId}.</>
+                    <>正在查看任务 {runtimeTaskId} 的 Sprint 22 运行态只读视图。</>
                   ) : (
                     <>
-                      No runtimeTaskId selected. Add ?runtimeTaskId=&lt;task-id&gt; to inspect one
-                      Sprint 22 runtime execution view, or use the automatic latest-task view below.
+                      当前未选择 runtimeTaskId。可通过 ?runtimeTaskId=&lt;task-id&gt; 查看指定任务，
+                      或使用下方自动选择的最近任务只读视图。
                     </>
                   )}
                 </p>
               </div>
               {runtimeTaskId ? (
-                <RuntimeExecutionPanel taskId={runtimeTaskId} />
+                <RuntimeExecutionPanel
+                  taskId={runtimeTaskId}
+                  highlightedSection={runtimeSection}
+                />
               ) : (
                 <LatestRuntimeExecutionPanel />
               )}
@@ -158,8 +187,8 @@ export default async function OperatorConsole({
 
         <section id="governance" className="scroll-mt-16 space-y-4">
           <SectionHeader
-            title="Governance Ledger"
-            description="Audit, evidence, evaluation, department, and assignment records. Approvals remain local record transitions, not runtime permission."
+            title="治理账本 Governance Ledger"
+            description="Audit、Evidence、Eval、Department 与 Assignment 记录。审批仍是本地记录流转，不代表运行态权限。"
           />
           <div className="grid gap-4 xl:grid-cols-2">
             <AuditTimeline />

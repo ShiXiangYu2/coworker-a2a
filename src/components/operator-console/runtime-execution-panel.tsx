@@ -4,6 +4,11 @@ import { useEffect, useState } from 'react'
 import type { RuntimeOperatorTaskViewModel } from '@/lib/runtime-execution'
 import { EmptyState, ErrorState, LoadingState, PanelShell, RecordMeta, SafetyNote, StatusBadge } from './ui'
 
+export type RuntimeExecutionHighlightedSection =
+  | 'summary'
+  | 'latest-receipt'
+  | 'blocked-signal'
+
 type LatestTask = {
   id: string
   title: string
@@ -73,7 +78,13 @@ export function LatestRuntimeExecutionPanel() {
   )
 }
 
-export function RuntimeExecutionPanel({ taskId }: { taskId?: string | null }) {
+export function RuntimeExecutionPanel({
+  taskId,
+  highlightedSection,
+}: {
+  taskId?: string | null
+  highlightedSection?: RuntimeExecutionHighlightedSection
+}) {
   const [data, setData] = useState<RuntimeOperatorTaskViewModel | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -165,7 +176,7 @@ export function RuntimeExecutionPanel({ taskId }: { taskId?: string | null }) {
     >
       <div className="space-y-4 p-4">
         <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
+          <div className={sectionCardClass(highlightedSection === 'summary')}>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-gray-900">主状态</span>
               <StatusBadge status={data.highlight.primaryStatus} />
@@ -182,6 +193,9 @@ export function RuntimeExecutionPanel({ taskId }: { taskId?: string | null }) {
               <Metric label="Succeeded receipts" value={data.summary.receipts.succeededCount} />
               <Metric label="Live jobs" value={data.statusBands.live.length} />
             </div>
+            {highlightedSection === 'summary' && (
+              <p className="mt-3 text-xs font-medium text-sky-700">当前定位到运行态摘要区块</p>
+            )}
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-slate-50 p-3">
@@ -202,12 +216,18 @@ export function RuntimeExecutionPanel({ taskId }: { taskId?: string | null }) {
         <div className="grid gap-3 lg:grid-cols-2">
           <StatusColumn title="Live" items={data.statusBands.live} emptyLabel="暂无 live runtime job。" />
           <StatusColumn title="Succeeded" items={data.statusBands.succeeded} emptyLabel="暂无 succeeded runtime job。" />
-          <StatusColumn title="Blocked" items={data.statusBands.blocked} emptyLabel="暂无 blocked runtime job。" />
+          <StatusColumn
+            title="Blocked"
+            items={data.statusBands.blocked}
+            emptyLabel="暂无 blocked runtime job。"
+            highlighted={highlightedSection === 'blocked-signal'}
+            highlightLabel="当前定位到 blocked signal 区块"
+          />
           <StatusColumn title="Failed" items={data.statusBands.failed} emptyLabel="暂无 failed runtime job。" />
         </div>
 
         {(data.latestJob || data.latestReceipt) && (
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
+          <div className={sectionCardClass(highlightedSection === 'latest-receipt')}>
             <p className="text-sm font-medium text-gray-900">最新 Job 明细</p>
             <RecordMeta>
               Job {data.latestJob?.job?.id ?? 'none'} | 状态 {data.latestJob?.job?.status ?? 'none'} | Receipt {data.latestReceipt?.status ?? 'none'}
@@ -218,6 +238,9 @@ export function RuntimeExecutionPanel({ taskId }: { taskId?: string | null }) {
               <div className="rounded bg-slate-50 p-2">Lease active: {String(data.latestJob?.derived.leaseActive ?? false)}</div>
               <div className="rounded bg-slate-50 p-2">Has receipt: {String(data.latestJob?.derived.hasReceipt ?? false)}</div>
             </div>
+            {highlightedSection === 'latest-receipt' && (
+              <p className="mt-3 text-xs font-medium text-sky-700">当前定位到最新 receipt 区块</p>
+            )}
           </div>
         )}
 
@@ -227,6 +250,12 @@ export function RuntimeExecutionPanel({ taskId }: { taskId?: string | null }) {
       </div>
     </PanelShell>
   )
+}
+
+function sectionCardClass(highlighted: boolean): string {
+  return highlighted
+    ? 'rounded-lg border border-sky-300 bg-sky-50/60 p-3 ring-2 ring-sky-100'
+    : 'rounded-lg border border-gray-200 bg-white p-3'
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
@@ -242,13 +271,17 @@ function StatusColumn({
   title,
   items,
   emptyLabel,
+  highlighted = false,
+  highlightLabel,
 }: {
   title: string
   items: RuntimeOperatorTaskViewModel['jobs']
   emptyLabel: string
+  highlighted?: boolean
+  highlightLabel?: string
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
+    <div className={sectionCardClass(highlighted)}>
       <p className="text-sm font-medium text-gray-900">{title}</p>
       {items.length === 0 ? (
         <p className="mt-2 text-xs text-gray-500">{emptyLabel}</p>
@@ -267,6 +300,9 @@ function StatusColumn({
           ))}
         </div>
       )}
+      {highlighted && highlightLabel ? (
+        <p className="mt-3 text-xs font-medium text-sky-700">{highlightLabel}</p>
+      ) : null}
     </div>
   )
 }
