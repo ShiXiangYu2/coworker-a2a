@@ -39,7 +39,6 @@ const forbiddenRuntimeLabels = [
   'Release',
   'Complete Task',
   'Retry',
-  'Replay',
   'Rollback',
   'Restore',
   'Resume Execution',
@@ -192,7 +191,11 @@ describe('Sprint 18-21 Operator Console Safety', () => {
     expect(source).toContain('/api/agent-task-runs?correlationId=')
     expect(source).toContain('/api/runtime-executions?correlationId=')
     expect(source).toContain('/api/runs?limit=5')
+    expect(source).toContain('/api/runs/${encodeURIComponent(correlationId)}')
     expect(source).toContain('Recent Runs')
+    expect(source).toContain('View Replay')
+    expect(source).toContain('Read-only Replay')
+    expect(source).toContain('Replay Timeline')
 
     for (const label of forbiddenRuntimeLabels) {
       expect(source).not.toContain(label)

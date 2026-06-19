@@ -8,10 +8,13 @@ import {
   createRuntimeExecutionToken,
   failRuntimeDispatchJob,
   getRuntimeDispatchJobById,
+  getRuntimeExecutionReceiptByJobId,
   getRuntimeExecutionTokenById,
   heartbeatRuntimeDispatchJob,
+  listRuntimeDispatchAttempts,
   listRuntimeDispatchJobs,
   listRuntimeExecutionTokens,
+  listRuntimeRecoveryPoints,
   runRuntimeDispatchJobOnce,
   startRuntimeDispatchJob,
 } from '@/lib/runtime-execution'
@@ -27,6 +30,9 @@ import { POST as blockJob } from '../jobs/[id]/block/route'
 import { POST as completeDryRunJob } from '../jobs/[id]/complete-dry-run/route'
 import { POST as completeObsidianWriteJob } from '../jobs/[id]/complete-obsidian-write/route'
 import { POST as runOnceJob } from '../jobs/[id]/run-once/route'
+import { GET as getJobAttempts } from '../jobs/[id]/attempts/route'
+import { GET as getJobReceipt } from '../jobs/[id]/receipt/route'
+import { GET as getJobRecovery } from '../jobs/[id]/recovery/route'
 import { GET as getTaskRuntimeJobs } from '../../tasks/[id]/runtime-jobs/route'
 
 vi.mock('@/lib/runtime-execution', async () => {
@@ -64,6 +70,16 @@ vi.mock('@/lib/runtime-execution', async () => {
     })),
     listRuntimeExecutionTokens: vi.fn(async () => [{ id: 'token-1', status: 'draft' }]),
     listRuntimeDispatchJobs: vi.fn(async () => [{ id: 'job-1', status: 'queued', taskId: 'task-1' }]),
+    listRuntimeDispatchAttempts: vi.fn(async (jobId) => [
+      { id: 'attempt-1', jobId, attempt: 1, status: 'leased', workerId: 'worker-1' },
+      { id: 'attempt-2', jobId, attempt: 1, status: 'running', workerId: 'worker-1' },
+    ]),
+    getRuntimeExecutionReceiptByJobId: vi.fn(async (jobId) => jobId === 'missing-receipt'
+      ? null
+      : { id: 'receipt-1', jobId, status: 'dry_run', resultJson: JSON.stringify({ dryRun: true }) }),
+    listRuntimeRecoveryPoints: vi.fn(async (jobId) => [
+      { id: 'recovery-1', jobId, recoveryKind: 'post_execute', snapshotJson: JSON.stringify({ dryRun: true }) },
+    ]),
     getRuntimeExecutionTokenById: vi.fn(async (id) => id === 'missing' ? null : { id, status: 'draft' }),
     getRuntimeDispatchJobById: vi.fn(async (id) => id === 'missing' ? null : { id, status: 'queued' }),
     claimRuntimeDispatchJob: vi.fn(async ({ workerId }) => ({
@@ -277,6 +293,49 @@ describe('Sprint 22 Runtime API', () => {
     expect(getRuntimeExecutionTokenById).toHaveBeenCalledWith('token-1')
     expect(getRuntimeDispatchJobById).toHaveBeenCalledWith('job-1')
     expect(listRuntimeDispatchJobs).toHaveBeenCalledWith({ taskId: 'task-1', limit: 100 })
+  })
+
+  it('queries runtime attempts, receipt, and recovery metadata without execution', async () => {
+    const attempts = await getJobAttempts(new Request('http://localhost/api/runtime/jobs/job-1/attempts'), {
+      params: Promise.resolve({ id: 'job-1' }),
+    })
+    const attemptsBody = await attempts.json()
+    expect(attempts.status).toBe(200)
+    expect(attemptsBody.data).toHaveLength(2)
+    expect(attemptsBody.safetyNote).toContain('Sprint 22')
+    expect(listRuntimeDispatchAttempts).toHaveBeenCalledWith('job-1')
+
+    const receipt = await getJobReceipt(new Request('http://localhost/api/runtime/jobs/job-1/receipt'), {
+      params: Promise.resolve({ id: 'job-1' }),
+    })
+    const receiptBody = await receipt.json()
+    expect(receipt.status).toBe(200)
+    expect(receiptBody.data.id).toBe('receipt-1')
+    expect(getRuntimeExecutionReceiptByJobId).toHaveBeenCalledWith('job-1')
+
+    const recovery = await getJobRecovery(new Request('http://localhost/api/runtime/jobs/job-1/recovery'), {
+      params: Promise.resolve({ id: 'job-1' }),
+    })
+    const recoveryBody = await recovery.json()
+    expect(recovery.status).toBe(200)
+    expect(recoveryBody.data[0].recoveryKind).toBe('post_execute')
+    expect(listRuntimeRecoveryPoints).toHaveBeenCalledWith('job-1')
+
+    expect(runRuntimeDispatchJobOnce).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobDryRun).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
+  })
+
+  it('returns not_found for missing runtime receipt', async () => {
+    const response = await getJobReceipt(new Request('http://localhost/api/runtime/jobs/missing-receipt/receipt'), {
+      params: Promise.resolve({ id: 'missing-receipt' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(body.error.code).toBe('not_found')
+    expect(body.safetyNote).toContain('Sprint 22')
+    expect(getRuntimeExecutionReceiptByJobId).toHaveBeenCalledWith('missing-receipt')
   })
 
   it('returns not_found for missing token or job', async () => {

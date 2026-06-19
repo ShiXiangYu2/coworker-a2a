@@ -43,6 +43,7 @@ interface DemoAgentTaskRun {
   id?: string
   agentId?: string
   agent?: string
+  taskId?: string
   taskType?: string
   title?: string
   status: string
@@ -54,9 +55,11 @@ interface DemoAgentTaskRun {
 interface DemoRuntimeExecution {
   id: string
   toolId: string
+  action?: string
   status: string
   policyDecision: string
   targetPath: string
+  approvalRecordId?: string | null
 }
 
 interface RecentRun {
@@ -96,6 +99,8 @@ export function ExecutionGatewayPanel() {
   const [demoCorrelationId, setDemoCorrelationId] = useState<string>('not_created')
   const [recentRuns, setRecentRuns] = useState<RecentRun[]>([])
   const [selectedRun, setSelectedRun] = useState<RecentRun | null>(null)
+  const [runDetailLoading, setRunDetailLoading] = useState(false)
+  const [runDetailError, setRunDetailError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [intentTitle, setIntentTitle] = useState('')
@@ -246,6 +251,25 @@ export function ExecutionGatewayPanel() {
     }
   }
 
+  async function fetchRunDetail(correlationId: string, fallback: RecentRun) {
+    setSelectedRun(fallback)
+    setRunDetailLoading(true)
+    setRunDetailError(null)
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(correlationId)}`)
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        setRunDetailError(data.error?.message ?? 'Unable to load read-only replay.')
+        return
+      }
+      setSelectedRun(data.data)
+    } catch (error) {
+      setRunDetailError(error instanceof Error ? error.message : 'Unable to load read-only replay.')
+    } finally {
+      setRunDetailLoading(false)
+    }
+  }
+
   async function transition(id: string, action: 'submit-review' | 'approve-record' | 'reject' | 'archive') {
     const res = await fetch(`/api/execution-intents/${id}/${action}`, { method: 'POST' })
     if (!res.ok) return
@@ -386,7 +410,7 @@ export function ExecutionGatewayPanel() {
                 <button
                   key={run.correlationId}
                   type="button"
-                  onClick={() => setSelectedRun(run)}
+                  onClick={() => void fetchRunDetail(run.correlationId, run)}
                   className={`w-full rounded border p-2 text-left text-xs ${
                     active ? 'border-slate-400 bg-white text-slate-900' : 'border-transparent bg-white text-gray-700'
                   }`}
@@ -396,6 +420,7 @@ export function ExecutionGatewayPanel() {
                     {run.status} | agent tasks: {run.agentTaskRuns.length} | runtime: {run.runtimeExecutions.length}
                   </p>
                   <p className="mt-1 text-gray-500">Receipt: {run.latestReceiptStatus ?? 'pending'}</p>
+                  <p className="mt-1 text-gray-500">View Replay</p>
                 </button>
               )
             })}
@@ -403,27 +428,41 @@ export function ExecutionGatewayPanel() {
           {selectedRun && (
             <div className="mt-4 space-y-2">
               <div className="rounded bg-white p-2 text-xs text-gray-700">
+                <p className="font-medium text-gray-900">Read-only Replay</p>
                 <p className="break-all">Run: {selectedRun.correlationId}</p>
                 <p className="mt-1">Status: {selectedRun.status}</p>
                 <p className="mt-1">Orchestrator: {selectedRun.orchestrator ?? 'unknown'}</p>
+                <p className="mt-1">Started: {selectedRun.startedAt ? new Date(selectedRun.startedAt).toLocaleString() : 'unknown'}</p>
+                <p className="mt-1">Completed: {selectedRun.completedAt ? new Date(selectedRun.completedAt).toLocaleString() : 'unknown'}</p>
                 <p className="mt-1 break-all">Latest runtime: {selectedRun.latestRuntimeRecordId ?? 'pending'}</p>
               </div>
+              {runDetailLoading && <p className="text-xs text-gray-500">Loading read-only replay...</p>}
+              {runDetailError && <ErrorState message={runDetailError} />}
+              <p className="text-xs font-medium text-gray-900">Agent Task Runs</p>
               {selectedRun.agentTaskRuns.map((task) => (
                 <div key={task.id ?? task.agentTaskRunRecordId} className="rounded bg-white p-2 text-xs text-gray-700">
                   <p>{task.agentId ?? task.agent} | {task.taskType ?? task.title} | {task.status}</p>
+                  <p className="mt-1 break-all text-gray-500">Task: {task.taskId ?? 'unknown'}</p>
+                  {task.startedAt && <p className="mt-1 text-gray-500">Started: {new Date(task.startedAt).toLocaleString()}</p>}
+                  {task.completedAt && <p className="mt-1 text-gray-500">Completed: {new Date(task.completedAt).toLocaleString()}</p>}
                   <p className="mt-1 break-all text-gray-500">{task.id ?? task.agentTaskRunRecordId}</p>
                 </div>
               ))}
+              <p className="text-xs font-medium text-gray-900">Runtime Executions</p>
               {selectedRun.runtimeExecutions.map((execution) => (
                 <div key={execution.id} className="rounded bg-white p-2 text-xs text-gray-700">
                   <p>{execution.toolId} | {execution.status}</p>
+                  <p className="mt-1">Action: {execution.action ?? 'unknown'}</p>
                   <p className="mt-1">{execution.policyDecision}</p>
+                  <p className="mt-1 break-all text-gray-500">Approval: {execution.approvalRecordId ?? 'pending'}</p>
                   <p className="mt-1 break-all text-gray-500">{execution.targetPath}</p>
                 </div>
               ))}
+              <p className="text-xs font-medium text-gray-900">Replay Timeline</p>
               {selectedRun.timelineEvents.map((event) => (
                 <div key={event.id} className="rounded bg-white p-2 text-xs text-gray-700">
                   <p>{event.eventType} | {event.actorType}</p>
+                  <p className="mt-1 text-gray-500">{new Date(event.createdAt).toLocaleString()}</p>
                   <p className="mt-1 text-gray-500">{event.reason}</p>
                 </div>
               ))}
