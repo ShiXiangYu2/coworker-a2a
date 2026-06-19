@@ -4,6 +4,7 @@ export type ToolCategory =
   | 'read_simulated'
   | 'read'
   | 'write'
+  | 'write_sandbox'
   | 'command'
   | 'git'
   | 'pr'
@@ -196,13 +197,13 @@ export type ToolExecutionStatus =
   | 'denied'
   | 'rejected'
 
-export type ToolSideEffectClass = 'none' | 'simulated_read'
+export type ToolSideEffectClass = 'none' | 'simulated_read' | 'sandbox_file_write'
 
 export interface ToolExecutor {
   id: string
   executorVersion: string
   toolId: string
-  toolCategory: Extract<ToolCategory, 'internal_noop' | 'read_simulated'>
+  toolCategory: Extract<ToolCategory, 'internal_noop' | 'read_simulated' | 'write_sandbox'>
   executionMode: 'deterministic_local'
   enabled: boolean
   sandboxId: string
@@ -212,7 +213,7 @@ export interface ToolExecutor {
   timeoutMs: number
   idempotencyRequired: true
   sideEffectClass: ToolSideEffectClass
-  deterministicOutputRequired: true
+  deterministicOutputRequired: boolean
   createdAt: string
   updatedAt: string
 }
@@ -224,7 +225,7 @@ export interface ToolSandbox {
   allowShell: false
   allowGit: false
   allowFileRead: false
-  allowFileWrite: false
+  allowFileWrite: boolean
   allowNetwork: false
   allowExternalApi: false
   allowMcp: false
@@ -245,7 +246,7 @@ export interface ToolExecutionPolicy {
   policyVersion: string
   status: 'draft' | 'active' | 'archived'
   defaultDecision: 'deny'
-  allowedToolCategories: Extract<ToolCategory, 'internal_noop' | 'read_simulated'>[]
+  allowedToolCategories: Extract<ToolCategory, 'internal_noop' | 'read_simulated' | 'write_sandbox'>[]
   deniedToolCategories: (ToolCategory | 'file_read' | 'file_write' | 'database_migration')[]
   requiresKelvinForRisk: Exclude<ToolRiskLevel, 'low'>[]
   maxRuntimeMs: number
@@ -255,7 +256,7 @@ export interface ToolExecutionPolicy {
   requireAuditEvent: true
   requireObservabilityEvent: true
   requireIdempotencyKey: true
-  requireDeterministicOutput: true
+  requireDeterministicOutput: boolean
   allowAutomaticFutureApproval: false
   allowRetry: false
   allowReplay: false
@@ -278,7 +279,7 @@ export interface ToolExecutionPlan {
   status: 'draft' | 'ready_for_confirmation' | 'approved_record' | 'rejected' | 'expired'
   executionMode: 'deterministic_local'
   sideEffectClass: ToolSideEffectClass
-  expectedSideEffects: []
+  expectedSideEffects: string[]
   reversibility: 'not_required' | 'inspect_only'
   idempotencyKey: string
   inputSnapshot: unknown
@@ -291,6 +292,10 @@ export interface ToolExecutionPlan {
   evalRunIds?: string[]
   regressionGateId?: string
   releaseReadinessChecklistId?: string
+  sandboxProfileId?: string
+  allowedWriteRoot?: 'deliverables'
+  allowedExtensions?: string[]
+  expectedOutputPath?: string
   expiresAt?: string
   createdAt: string
   updatedAt: string
@@ -316,7 +321,7 @@ export interface ToolExecutionReceipt {
   executorVersion: string
   resultSummary: string
   resultSnapshot?: unknown
-  sideEffects: []
+  sideEffects: string[]
   sideEffectClass: ToolSideEffectClass
   reversibility: 'not_required' | 'inspect_only'
   simulatedReads?: {
@@ -324,6 +329,9 @@ export interface ToolExecutionReceipt {
     key: string
     hash: string
   }[]
+  sandboxExecutionRecordId?: string
+  outputPath?: string
+  bytesWritten?: number
   auditEventIds: string[]
   observabilityEventIds: string[]
   recoveryPointId: string
@@ -339,7 +347,7 @@ export interface ToolResult {
     recommendedAction: 'continue' | 'retry' | 'stop' | 'escalate'
     reason?: string
   }
-  sideEffects: []
+  sideEffects: string[]
   warnings?: string[]
   auditRefs?: string[]
   sideEffectClass?: ToolSideEffectClass

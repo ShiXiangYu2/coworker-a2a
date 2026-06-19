@@ -172,6 +172,10 @@ export function serializeToolExecutionPlan(record: {
   evalRunIdsJson: string | null
   regressionGateId: string | null
   releaseReadinessChecklistId: string | null
+  sandboxProfileId: string | null
+  allowedWriteRoot: string | null
+  allowedExtensionsJson: string | null
+  expectedOutputPath: string | null
   expiresAt: Date | null
   createdAt: Date
   updatedAt: Date
@@ -202,6 +206,10 @@ export function serializeToolExecutionPlan(record: {
     evalRunIds: decodeJson(record.evalRunIdsJson, undefined),
     regressionGateId: record.regressionGateId ?? undefined,
     releaseReadinessChecklistId: record.releaseReadinessChecklistId ?? undefined,
+    sandboxProfileId: record.sandboxProfileId ?? undefined,
+    allowedWriteRoot: (record.allowedWriteRoot as 'deliverables' | null) ?? undefined,
+    allowedExtensions: decodeJson(record.allowedExtensionsJson, undefined),
+    expectedOutputPath: record.expectedOutputPath ?? undefined,
     expiresAt: dateToString(record.expiresAt),
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
@@ -232,6 +240,9 @@ export function serializeToolExecutionReceipt(record: {
   sideEffectClass: string
   reversibility: string
   simulatedReadsJson: string | null
+  sandboxExecutionRecordId: string | null
+  outputPath: string | null
+  bytesWritten: number | null
   auditEventIdsJson: string
   observabilityEventIdsJson: string
   recoveryPointId: string
@@ -261,6 +272,9 @@ export function serializeToolExecutionReceipt(record: {
     sideEffectClass: record.sideEffectClass as ToolExecutionReceipt['sideEffectClass'],
     reversibility: record.reversibility as ToolExecutionReceipt['reversibility'],
     simulatedReads: decodeJson(record.simulatedReadsJson, undefined),
+    sandboxExecutionRecordId: record.sandboxExecutionRecordId ?? undefined,
+    outputPath: record.outputPath ?? undefined,
+    bytesWritten: record.bytesWritten ?? undefined,
     auditEventIds: decodeJson(record.auditEventIdsJson, []),
     observabilityEventIds: decodeJson(record.observabilityEventIdsJson, []),
     recoveryPointId: record.recoveryPointId,

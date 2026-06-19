@@ -16,6 +16,8 @@ import {
   assertDeterministicOutput,
   defaultToolExecutionPolicy,
   executeDeterministicLocalTool,
+  executeSandboxFileWriteTool,
+  getPolicyForToolCategory,
   getToolExecutionPolicy,
   getToolExecutor,
   getToolSandbox,
@@ -356,8 +358,8 @@ export async function createControlledToolRunFromToolCall(
   if (tool.sprint11ExecutionMode !== 'controlled_deterministic_local') {
     throw new ToolRepositoryError('Tool is not executable under Sprint 11 controlled runtime.')
   }
-  if (!['internal_noop', 'read_simulated'].includes(tool.category)) {
-    throw new ToolRepositoryError('Tool category is not executable under Sprint 11 controlled runtime.')
+  if (!isControlledExecutableCategory(tool.category)) {
+    throw new ToolRepositoryError('Tool category is not executable under controlled runtime.')
   }
   const idempotencyKey = input.idempotencyKey ?? `controlled-tool-run:${toolCallId}`
   const existing = await findToolRunByIdempotencyKey(idempotencyKey)
@@ -377,7 +379,7 @@ export async function createControlledToolRunFromToolCall(
         ${call.agentRunId ?? null}, ${tool.id}, ${'created'}, ${'controlled_execution'},
         ${encodeJson(call.input)}, ${null}, ${null}, ${null}, ${tool.executorId ?? null},
         ${tool.sandboxId ?? null}, ${tool.executionPolicyRef ?? null}, ${null},
-        ${tool.category === 'read_simulated' ? 'simulated_read' : 'none'},
+        ${sideEffectClassForToolCategory(tool.category)},
         ${null}, ${null}, ${new Date()}, ${new Date()}
       )
     `
@@ -439,7 +441,8 @@ export async function planToolExecution(
   if (!sandbox) throw new ToolRepositoryError('ToolSandbox not found.', 404)
 
   try {
-    validateExecutionPolicy(defaultToolExecutionPolicy, tool, executor)
+    const policy = getPolicyForToolCategory(tool.category)
+    validateExecutionPolicy(policy, tool, executor)
     validateToolSandbox(sandbox)
   } catch (error) {
     normalizeToolError(error)
@@ -468,6 +471,9 @@ export async function planToolExecution(
   if (permission?.decision !== 'allow_controlled_execution') {
     throw new ToolRepositoryError(`${permission?.decision ?? 'missing_permission'} cannot execute.`)
   }
+  const policy = getPolicyForToolCategory(tool.category)
+  const isSandboxWrite = tool.category === 'write_sandbox'
+  const sandboxPlan = isSandboxWrite ? sandboxPlanMetadata(call.input) : null
   const nextStatus = transitionToolRun(toolRun.status, 'REQUIRE_EXECUTION_CONFIRMATION')
   const recovery = await createRecoveryPoint({
     correlationId: call.correlationId,
@@ -529,22 +535,25 @@ export async function planToolExecution(
         expectedSideEffectsJson, reversibility, idempotencyKey, inputSnapshotJson,
         normalizedInputHash, policyVersion, executorVersion, requiresKelvinConfirmation,
         confirmationArtifactId, recoveryPointId, evalRunIdsJson, regressionGateId,
-        releaseReadinessChecklistId, expiresAt, createdAt, updatedAt
+        releaseReadinessChecklistId, sandboxProfileId, allowedWriteRoot,
+        allowedExtensionsJson, expectedOutputPath, expiresAt, createdAt, updatedAt
       ) VALUES (
         ${planId}, ${toolRun.id}, ${call.id}, ${call.taskId ?? null}, ${call.agentRunId ?? null},
-        ${tool.id}, ${executor.id}, ${sandbox.id}, ${defaultToolExecutionPolicy.id},
+        ${tool.id}, ${executor.id}, ${sandbox.id}, ${policy.id},
         ${'ready_for_confirmation'}, ${'deterministic_local'}, ${executor.sideEffectClass},
-        ${encodeJson([])}, ${executor.sideEffectClass === 'simulated_read' ? 'inspect_only' : 'not_required'},
+        ${encodeJson(isSandboxWrite ? ['sandbox_file_write'] : [])}, ${executor.sideEffectClass === 'simulated_read' ? 'inspect_only' : 'not_required'},
         ${idempotencyKey}, ${encodeJson(call.input)}, ${stableHash(call.input)},
-        ${defaultToolExecutionPolicy.policyVersion}, ${executor.executorVersion}, ${true},
+        ${policy.policyVersion}, ${executor.executorVersion}, ${true},
         ${confirmation.id}, ${recovery.recoveryPoint.id}, ${encodeJson([])}, ${null},
-        ${null}, ${expiresAt}, ${new Date()}, ${new Date()}
+        ${null}, ${sandboxPlan?.sandboxProfileId ?? null}, ${sandboxPlan?.allowedWriteRoot ?? null},
+        ${sandboxPlan ? encodeJson(sandboxPlan.allowedExtensions) : null},
+        ${sandboxPlan?.expectedOutputPath ?? null}, ${expiresAt}, ${new Date()}, ${new Date()}
       )
     `
     await tx.$executeRaw`
       UPDATE tool_runs
       SET status = ${nextStatus}, executionPlanId = ${planId}, executorId = ${executor.id},
-          sandboxId = ${sandbox.id}, executionPolicyId = ${defaultToolExecutionPolicy.id},
+          sandboxId = ${sandbox.id}, executionPolicyId = ${policy.id},
           recoveryPointId = ${recovery.recoveryPoint.id}, updatedAt = ${new Date()}
       WHERE id = ${toolRun.id}
     `
@@ -724,7 +733,8 @@ export async function executeApprovedToolRun(
   const recoveryPoint = plan.recoveryPointId ? await getRecoveryPoint(plan.recoveryPointId) : null
 
   try {
-    validateExecutionPolicy(defaultToolExecutionPolicy, tool, executor)
+    const policy = getPolicyForToolCategory(tool.category)
+    validateExecutionPolicy(policy, tool, executor)
     validateToolSandbox(sandbox)
     validateExecutionPreconditions({
       toolRun,
@@ -738,11 +748,23 @@ export async function executeApprovedToolRun(
   }
 
   const startedAt = new Date()
-  await updateToolRunStatus(toolRun, transitionToolRun(toolRun.status, 'START_APPROVED_EXECUTION'), 'tool.execution_started', 'execute-approved started one deterministic local ToolRun.')
-  const first = executeDeterministicLocalTool({ toolRun, toolCall: call, plan, executor })
-  const second = executeDeterministicLocalTool({ toolRun, toolCall: call, plan, executor })
+  const isSandboxWrite = executor.toolCategory === 'write_sandbox'
+  await updateToolRunStatus(
+    toolRun,
+    transitionToolRun(toolRun.status, 'START_APPROVED_EXECUTION'),
+    'tool.execution_started',
+    isSandboxWrite
+      ? 'execute-approved started one human-gated sandbox file write ToolRun.'
+      : 'execute-approved started one deterministic local ToolRun.'
+  )
+  const first = isSandboxWrite
+    ? await executeSandboxFileWriteTool({ toolRun, toolCall: call, plan })
+    : executeDeterministicLocalTool({ toolRun, toolCall: call, plan, executor })
   try {
-    assertDeterministicOutput(first.resultSnapshot, second.resultSnapshot)
+    if (!isSandboxWrite) {
+      const second = executeDeterministicLocalTool({ toolRun, toolCall: call, plan, executor })
+      assertDeterministicOutput(first.resultSnapshot, second.resultSnapshot)
+    }
     validateToolResult(first.result)
   } catch (error) {
     await updateToolRunStatus(await requireToolRun(id), 'failed', 'tool.execution_failed', error instanceof Error ? error.message : 'Tool execution failed.')
@@ -760,7 +782,8 @@ export async function executeApprovedToolRun(
         executionPlanId, status, startedAt, completedAt, durationMs, idempotencyKey,
         inputHash, outputHash, policyVersion, executorVersion, resultSummary,
         resultSnapshotJson, sideEffectsJson, sideEffectClass, reversibility,
-        simulatedReadsJson, auditEventIdsJson, observabilityEventIdsJson,
+        simulatedReadsJson, sandboxExecutionRecordId, outputPath, bytesWritten,
+        auditEventIdsJson, observabilityEventIdsJson,
         recoveryPointId, createdAt
       ) VALUES (
         ${receiptId}, ${toolRun.id}, ${call.id}, ${call.taskId ?? null}, ${call.agentRunId ?? null},
@@ -769,7 +792,9 @@ export async function executeApprovedToolRun(
         ${plan.normalizedInputHash}, ${stableHash(first.resultSnapshot)},
         ${plan.policyVersion}, ${plan.executorVersion}, ${first.result.summary},
         ${encodeJson(first.resultSnapshot)}, ${encodeJson([])}, ${plan.sideEffectClass},
-        ${plan.reversibility}, ${encodeJson(first.simulatedReads)}, ${encodeJson([])},
+        ${plan.reversibility}, ${encodeJson(first.simulatedReads)}, ${null},
+        ${readOutputPath(first.resultSnapshot)}, ${readBytesWritten(first.resultSnapshot)},
+        ${encodeJson([])},
         ${encodeJson([])}, ${plan.recoveryPointId}, ${new Date()}
       )
     `
@@ -787,11 +812,13 @@ export async function executeApprovedToolRun(
         actorType: 'user',
         beforeStatus: 'executing',
         afterStatus: 'succeeded',
-        reason: 'Approved deterministic local ToolRun executed. No external side effects occurred.',
+        reason: isSandboxWrite
+          ? 'Approved sandbox deliverable write executed inside deliverables/. No source, Git, external API, MCP, or deploy action occurred.'
+          : 'Approved deterministic local ToolRun executed. No external side effects occurred.',
         payloadJson: encodeJson({
           toolRunId: toolRun.id,
           executionReceiptId: receiptId,
-          sideEffects: [],
+          sideEffects: isSandboxWrite ? ['sandbox_file_write'] : [],
           sideEffectClass: plan.sideEffectClass,
         }),
       },
@@ -803,9 +830,16 @@ export async function executeApprovedToolRun(
     resourceType: 'tool_run',
     resourceId: toolRun.id,
     eventType: 'tool.execution_succeeded',
-    message: 'Approved deterministic local ToolRun succeeded with empty sideEffects.',
+    message: isSandboxWrite
+      ? 'Approved sandbox deliverable write succeeded inside deliverables/.'
+      : 'Approved deterministic local ToolRun succeeded with empty sideEffects.',
     source: 'repository',
-    attributes: { executionReceiptId: receiptId, sideEffects: [] },
+    attributes: {
+      executionReceiptId: receiptId,
+      sideEffects: isSandboxWrite ? ['sandbox_file_write'] : [],
+      outputPath: readOutputPath(first.resultSnapshot),
+      bytesWritten: readBytesWritten(first.resultSnapshot),
+    },
   })
   observabilityId = observability.id
   await prisma.$executeRaw`
@@ -952,9 +986,10 @@ async function getOrCreateControlledPermission(call: ToolCall): Promise<ToolPerm
   if (!tool || tool.sprint11ExecutionMode !== 'controlled_deterministic_local') {
     throw new ToolRepositoryError('ToolCall cannot receive controlled execution permission.')
   }
-  if (!['internal_noop', 'read_simulated'].includes(tool.category)) {
-    throw new ToolRepositoryError('Only internal_noop or read_simulated may receive controlled execution permission.')
+  if (!isControlledExecutableCategory(tool.category)) {
+    throw new ToolRepositoryError('Only controlled executable tool categories may receive controlled execution permission.')
   }
+  const policy = getPolicyForToolCategory(tool.category)
   const permissionId = randomUUID()
   await prisma.$executeRaw`
     INSERT INTO tool_permissions (
@@ -963,10 +998,15 @@ async function getOrCreateControlledPermission(call: ToolCall): Promise<ToolPerm
       schemaValidationErrorsJson, matchedRulesJson, deniedRulesJson, createdAt
     ) VALUES (
       ${permissionId}, ${call.id}, ${tool.id}, ${'allow_controlled_execution'},
-      ${'Sprint 11 allows this specific ToolRun to continue toward controlled local execution only.'},
-      ${'policy'}, ${defaultToolExecutionPolicy.id}, ${tool.permissionProfileRef},
+      ${tool.category === 'write_sandbox'
+        ? 'Sprint 22 allows this specific approved ToolRun to write one sandbox deliverable only.'
+        : 'Sprint 11 allows this specific ToolRun to continue toward controlled local execution only.'},
+      ${'policy'}, ${policy.id}, ${tool.permissionProfileRef},
       ${tool.riskLevel}, ${'valid'}, ${encodeJson([])},
-      ${encodeJson(['sprint11.controlled_execution', `category.${tool.category}.allowed`])},
+      ${encodeJson([
+        tool.category === 'write_sandbox' ? 'sprint22.human_gated_sandbox_write' : 'sprint11.controlled_execution',
+        `category.${tool.category}.allowed`,
+      ])},
       ${encodeJson([])}, ${new Date()}
     )
   `
@@ -1121,4 +1161,43 @@ function safeJson<T>(value: string | null | undefined, fallback: T): T {
   } catch {
     return fallback
   }
+}
+
+function isControlledExecutableCategory(category: string): boolean {
+  return ['internal_noop', 'read_simulated', 'write_sandbox'].includes(category)
+}
+
+function sideEffectClassForToolCategory(category: string): ToolRun['sideEffectClass'] {
+  if (category === 'read_simulated') return 'simulated_read'
+  if (category === 'write_sandbox') return 'sandbox_file_write'
+  return 'none'
+}
+
+function sandboxPlanMetadata(input: unknown): {
+  sandboxProfileId: string
+  allowedWriteRoot: 'deliverables'
+  allowedExtensions: string[]
+  expectedOutputPath: string
+} {
+  const targetPath =
+    input && typeof input === 'object' && !Array.isArray(input)
+      ? (input as Record<string, unknown>).targetPath
+      : undefined
+  if (typeof targetPath !== 'string' || !targetPath.trim()) {
+    throw new ToolRepositoryError('Sandbox write targetPath is required.')
+  }
+  return {
+    sandboxProfileId: 'sandbox-file-write-deliverables-sprint-22',
+    allowedWriteRoot: 'deliverables',
+    allowedExtensions: ['.md', '.json', '.txt'],
+    expectedOutputPath: targetPath,
+  }
+}
+
+function readOutputPath(snapshot: Record<string, unknown>): string | null {
+  return typeof snapshot.outputPath === 'string' ? snapshot.outputPath : null
+}
+
+function readBytesWritten(snapshot: Record<string, unknown>): number | null {
+  return typeof snapshot.bytesWritten === 'number' ? snapshot.bytesWritten : null
 }

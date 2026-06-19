@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
-import { writeSandboxDeliverable } from '@/lib/sandbox/file-write-sandbox'
-import { sprint22FileWriteProfile } from '@/lib/sandbox/file-write-sandbox'
+import { sprint22FileWriteProfile, writeSandboxDeliverable } from '../sandbox/file-write-sandbox'
 import type {
   ToolCall,
   ToolDefinition,
@@ -104,7 +103,7 @@ export const sprint22FileWriteSandbox: ToolSandbox = {
   ...defaultToolSandbox,
   id: sprint22FileWriteProfile.id,
   sandboxVersion: 'sprint-22.0',
-  allowFileWrite: true as false,
+  allowFileWrite: true,
 }
 
 export const toolExecutors: ToolExecutor[] = [
@@ -344,6 +343,7 @@ export async function executeSandboxFileWriteTool(input: {
 }): Promise<{
   result: ToolResult
   resultSnapshot: Record<string, unknown>
+  simulatedReads?: ToolExecutionReceipt['simulatedReads']
 }> {
   const written = await writeSandboxDeliverable(input.toolCall.input)
   const resultSnapshot = {
