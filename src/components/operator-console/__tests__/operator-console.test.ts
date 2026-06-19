@@ -12,6 +12,7 @@ import { DepartmentPanel } from '../department-panel'
 import { DepartmentEvidenceMapPanel } from '../department-evidence-map-panel'
 import { ExecutionGatewayPanel } from '../execution-gateway-panel'
 import { DepartmentAssignmentPanel } from '../department-assignment-panel'
+import { RuntimeExecutionPanel } from '../runtime-execution-panel'
 import { lifecycleStatuses } from '../ui'
 
 const forbiddenRuntimeLabels = [
@@ -61,11 +62,12 @@ describe('Operator Console Components', () => {
     expect(typeof DepartmentEvidenceMapPanel).toBe('function')
     expect(typeof ExecutionGatewayPanel).toBe('function')
     expect(typeof DepartmentAssignmentPanel).toBe('function')
+    expect(typeof RuntimeExecutionPanel).toBe('function')
   })
 })
 
 describe('Operator Console Index', () => {
-  it('exports all console panels without exposing an execution panel', async () => {
+  it('exports all console panels without exposing an unrestricted execution panel', async () => {
     const index = await import('../index')
     expect(index.TaskBoard).toBeDefined()
     expect(index.AgentStats).toBeDefined()
@@ -78,6 +80,7 @@ describe('Operator Console Index', () => {
     expect(index.DepartmentEvidenceMapPanel).toBeDefined()
     expect(index.ExecutionGatewayPanel).toBeDefined()
     expect(index.DepartmentAssignmentPanel).toBeDefined()
+    expect(index.RuntimeExecutionPanel).toBeDefined()
     expect('ExecutionPanel' in index).toBe(false)
   })
 })
@@ -96,14 +99,17 @@ describe('v1 frontend closure polish', () => {
     expect(source).toContain('DepartmentEvidenceMapPanel')
     expect(source).toContain('ExecutionGatewayPanel')
     expect(source).toContain('DepartmentAssignmentPanel')
+    expect(source).toContain('RuntimeExecutionPanel')
+    expect(source).toContain('runtimeTaskId')
+    expect(source).toContain('searchParams')
   })
 
   it('keeps ChatHub linked to the Operator Console with v1 local governance copy', () => {
     const source = readFileSync(join(process.cwd(), 'src', 'app', 'page.tsx'), 'utf8')
 
     expect(source).toContain('Operator Console')
-    expect(source).toContain('v1 local governance workspace')
-    expect(source).toContain('without hidden runtime authorization')
+    expect(source).toContain('v1 本地治理闭环')
+    expect(source).toContain('ChatHub 用来接收需求')
   })
 
   it('provides shared loading, empty, error, status, and safety UI states', () => {
@@ -193,9 +199,14 @@ describe('Sprint 18-21 Operator Console Safety', () => {
     expect(source).toContain('/api/runs?limit=5')
     expect(source).toContain('/api/runs/${encodeURIComponent(correlationId)}')
     expect(source).toContain('Recent Runs')
+    expect(source).toContain('Source:')
+    expect(source).toContain('Request status:')
+    expect(source).toContain('No request summary.')
     expect(source).toContain('View Replay')
     expect(source).toContain('Read-only Replay')
     expect(source).toContain('Replay Timeline')
+    expect(source).toContain('Failure Drill-down')
+    expect(source).toContain('Read-only Failure Review')
 
     for (const label of forbiddenRuntimeLabels) {
       expect(source).not.toContain(label)
@@ -220,6 +231,19 @@ describe('Sprint 18-21 Operator Console Safety', () => {
     }
   })
 
+  it('adds a read-only TaskBoard link to the runtime execution view', () => {
+    const source = readOperatorSource('task-board.tsx')
+
+    expect(source).toContain('/operator?runtimeTaskId=')
+    expect(source).toContain('View Runtime Status')
+    expect(source).not.toContain('Run Runtime')
+    expect(source).not.toContain('Claim Runtime')
+    expect(source).not.toContain('Start Runtime')
+    expect(source).not.toContain('Complete Runtime')
+    expect(source).not.toContain('Execute Runtime')
+    expect(source).not.toContain('Obsidian Write')
+  })
+
   it('does not expose execute-approved console wiring', async () => {
     const index = await import('../index')
     const dir = join(process.cwd(), 'src', 'components', 'operator-console')
@@ -230,6 +254,45 @@ describe('Sprint 18-21 Operator Console Safety', () => {
 
     expect('ExecutionPanel' in index).toBe(false)
     expect(source).not.toContain('/api/tool-runs/execute-approved')
-    expect(source).not.toContain('ExecutionPanel')
+    expect(source).not.toContain('export { ExecutionPanel')
+  })
+
+  it('adds a Sprint 22 runtime execution panel as read-only UI only', () => {
+    const source = readOperatorSource('runtime-execution-panel.tsx')
+
+    expect(source).toContain('RuntimeExecutionPanel')
+    expect(source).toContain('taskId')
+    expect(source).toContain('/api/tasks/${encodeURIComponent(taskIdForRequest)}/runtime-operator-view')
+    expect(source).toContain('EmptyState')
+    expect(source).toContain('LoadingState')
+    expect(source).toContain('ErrorState')
+    expect(source).toContain('primaryStatus')
+    expect(source).toContain('latestReceipt')
+    expect(source).toContain('summary.counts')
+    expect(source).toContain('summary.receipts')
+    expect(source).toContain('statusBands.live')
+    expect(source).toContain('statusBands.succeeded')
+    expect(source).toContain('statusBands.blocked')
+    expect(source).toContain('statusBands.failed')
+    expect(source).toContain('SafetyNote')
+    expect(source).not.toContain('<button')
+    expect(source).not.toContain('run-once')
+    expect(source).not.toContain('complete-dry-run')
+    expect(source).not.toContain('complete-obsidian-write')
+    expect(source).not.toContain('claimRuntime')
+    expect(source).not.toContain('startRuntime')
+  })
+
+  it('wires the runtime execution panel into the operator page through runtimeTaskId only', () => {
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'operator', 'page.tsx'), 'utf8')
+
+    expect(source).toContain('RuntimeExecutionPanel')
+    expect(source).toContain('runtimeTaskId')
+    expect(source).toContain('searchParams')
+    expect(source).toContain('taskId={runtimeTaskId}')
+    expect(source).not.toContain('/api/runtime/jobs/claim')
+    expect(source).not.toContain('/complete-dry-run')
+    expect(source).not.toContain('/complete-obsidian-write')
+    expect(source).not.toContain('/run-once')
   })
 })

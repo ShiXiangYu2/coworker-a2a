@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { EmptyState, ErrorState, LoadingState, PanelShell, RecordMeta, SafetyNote, StatusBadge } from './ui'
 
 interface EvidenceImportRecord {
   id: string
@@ -26,12 +27,12 @@ interface SanitizedEvidenceSnapshot {
 }
 
 const sourceOptions = [
-  ['user_pasted_text', 'Pasted text summary'],
-  ['user_provided_file_summary', 'File summary'],
-  ['user_provided_command_output_summary', 'Command output summary'],
-  ['user_provided_external_screenshot_description', 'Screenshot description'],
-  ['user_provided_sanitized_context_snapshot', 'Sanitized context snapshot'],
-  ['manual_note', 'Manual note'],
+  ['user_pasted_text', '粘贴文本摘要'],
+  ['user_provided_file_summary', '文件摘要'],
+  ['user_provided_command_output_summary', '命令输出摘要'],
+  ['user_provided_external_screenshot_description', '截图描述'],
+  ['user_provided_sanitized_context_snapshot', '脱敏上下文快照'],
+  ['manual_note', '人工备注'],
 ]
 
 export function EvidencePanel() {
@@ -91,7 +92,7 @@ export function EvidencePanel() {
       })
       const data = await res.json()
       if (!data.ok) {
-        setError(data.error?.message ?? data.error ?? 'Unable to create evidence record')
+        setError(data.error?.message ?? data.error ?? '无法创建证据记录')
         return
       }
       setRecords((prev) => [data.data, ...prev])
@@ -102,7 +103,7 @@ export function EvidencePanel() {
       setSummary('')
       setShowImport(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to create evidence record')
+      setError(err instanceof Error ? err.message : '无法创建证据记录')
     } finally {
       setSaving(false)
     }
@@ -117,36 +118,29 @@ export function EvidencePanel() {
   }
 
   if (loading) {
-    return (
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <div className="animate-pulse text-sm text-gray-500">Loading evidence records...</div>
-      </div>
-    )
+    return <LoadingState label="正在读取证据沙箱记录..." />
   }
 
   return (
-    <div className="rounded-lg border bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Evidence Sandbox</h2>
-          <p className="text-xs text-gray-500">
-            Sprint 17 extension. Sprint 16 core remains read-only presentation; these local evidence record actions do not execute, release, deploy, or complete tasks.
-          </p>
-        </div>
+    <PanelShell
+      title="Evidence Sandbox"
+      description="Sprint 17 证据沙箱。这里只导入 sanitized evidence summary，不执行、发布、部署或完成任务。"
+      action={
         <button
           onClick={() => setShowImport(!showImport)}
           className="rounded-lg bg-indigo-100 px-3 py-1.5 text-sm text-indigo-700 hover:bg-indigo-200"
         >
-          {showImport ? 'Cancel' : 'Import Evidence Summary'}
+          {showImport ? '取消导入' : '导入证据摘要'}
         </button>
-      </div>
+      }
+    >
 
       {showImport && (
         <div className="border-b bg-indigo-50 px-4 py-3">
           <div className="flex flex-col gap-2">
             <input
               type="text"
-              placeholder="Title"
+              placeholder="标题"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               className="rounded border px-3 py-1.5 text-sm"
@@ -161,19 +155,19 @@ export function EvidencePanel() {
               ))}
             </select>
             <textarea
-              placeholder="Paste a sanitized summary. Do not include secrets, tokens, cookies, credentials, raw headers, or raw payloads."
+              placeholder="粘贴已脱敏摘要。不要包含密钥、token、cookie、凭据、原始 header 或原始 payload。"
               value={summary}
               onChange={(event) => setSummary(event.target.value)}
               rows={4}
               className="rounded border px-3 py-1.5 text-sm"
             />
-            {error && <div className="text-xs text-red-600">{error}</div>}
+            {error && <ErrorState message={error} />}
             <button
               onClick={handleCreate}
               disabled={saving || !summary.trim()}
               className="self-end rounded-lg bg-indigo-600 px-4 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
             >
-              {saving ? 'Saving...' : 'Save Evidence Summary'}
+              {saving ? '保存中...' : '保存证据摘要'}
             </button>
           </div>
         </div>
@@ -181,9 +175,10 @@ export function EvidencePanel() {
 
       <div className="max-h-96 overflow-y-auto">
         {records.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-500">
-            No local evidence records yet.
-          </div>
+          <EmptyState
+            title="暂无本地证据记录"
+            description="导入脱敏摘要后，这里会展示 evidence record、sanitized snapshot 和 review lifecycle。"
+          />
         ) : (
           <div className="divide-y">
             {records.map((record) => {
@@ -204,24 +199,27 @@ export function EvidencePanel() {
                         <div className="flex items-center gap-2">
                           <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{record.sourceKind}</span>
                           <span className="text-sm font-medium text-gray-900">{record.title}</span>
+                          <StatusBadge status={record.status} />
                         </div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          {record.status} | {record.rawInputHandling} | {new Date(record.createdAt).toLocaleDateString()}
-                        </div>
+                        <RecordMeta>
+                          {record.rawInputHandling} / {new Date(record.createdAt).toLocaleString()}
+                        </RecordMeta>
                       </div>
-                      <span className="text-xs text-indigo-700">View Sanitized Snapshot</span>
+                      <span className="text-xs text-indigo-700">查看脱敏快照</span>
                     </div>
                   </button>
 
                   {expanded && (
                     <div className="mt-3 rounded border bg-gray-50 p-3">
                       <p className="text-sm text-gray-700">{record.importedContentSummary}</p>
-                      <p className="mt-2 text-xs text-gray-500">
-                        Local evidence record only. Approval here is not a permission grant or execution token.
-                      </p>
+                      <div className="mt-2">
+                        <SafetyNote>
+                          这里只是本地证据记录。批准该记录不代表权限授予、执行 token、路由 token 或任务完成。
+                        </SafetyNote>
+                      </div>
                       {riskFindings.length > 0 && (
                         <p className="mt-2 text-xs text-amber-700">
-                          Redaction findings: {riskFindings.join(', ')}
+                          脱敏发现：{riskFindings.join(', ')}
                         </p>
                       )}
                       <div className="mt-3 space-y-2">
@@ -234,16 +232,16 @@ export function EvidencePanel() {
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {record.status === 'draft' && (
-                          <button className="text-xs text-indigo-700" onClick={() => transition(record.id, 'submit-review')}>Submit Evidence Review</button>
+                          <button className="text-xs text-indigo-700" onClick={() => transition(record.id, 'submit-review')}>提交证据 review</button>
                         )}
                         {record.status === 'review' && (
                           <>
-                            <button className="text-xs text-green-700" onClick={() => transition(record.id, 'approve-record')}>Approve Evidence Record</button>
-                            <button className="text-xs text-red-700" onClick={() => transition(record.id, 'reject')}>Reject Evidence Record</button>
+                            <button className="text-xs text-green-700" onClick={() => transition(record.id, 'approve-record')}>批准本地证据记录</button>
+                            <button className="text-xs text-red-700" onClick={() => transition(record.id, 'reject')}>拒绝本地证据记录</button>
                           </>
                         )}
                         {record.status !== 'archived' && (
-                          <button className="text-xs text-gray-600" onClick={() => transition(record.id, 'archive')}>Archive Evidence Record</button>
+                          <button className="text-xs text-gray-600" onClick={() => transition(record.id, 'archive')}>归档证据记录</button>
                         )}
                       </div>
                     </div>
@@ -254,7 +252,7 @@ export function EvidencePanel() {
           </div>
         )}
       </div>
-    </div>
+    </PanelShell>
   )
 }
 

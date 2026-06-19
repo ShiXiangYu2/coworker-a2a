@@ -8,10 +8,13 @@ interface IntentRecord {
   intentTitle: string
   intentSummary: string
   status: string
+  correlationId?: string
+  sourceTaskId?: string
   requestedActionType: string
   requestedActionSummary: string
   riskSummary: string
   departmentProfileId?: string
+  createdBy?: string
   createdAt: string
 }
 
@@ -64,6 +67,10 @@ interface DemoRuntimeExecution {
 
 interface RecentRun {
   correlationId: string
+  runRequestRecordId: string | null
+  source: string | null
+  userMessage: string | null
+  requestStatus: string | null
   orchestrator: string | null
   status: string
   startedAt: string | null
@@ -79,6 +86,14 @@ interface RecentRun {
   }>
   latestReceiptStatus: string | null
   latestRuntimeRecordId: string | null
+  failureSummary?: {
+    hasFailure: boolean
+    failedAgentTaskRunIds: string[]
+    failedRuntimeExecutionIds: string[]
+    withheldRuntimeExecutionIds: string[]
+    deniedRuntimeExecutionIds: string[]
+    latestFailureReason: string | null
+  }
 }
 
 export function ExecutionGatewayPanel() {
@@ -279,7 +294,7 @@ export function ExecutionGatewayPanel() {
   }
 
   if (loading) {
-    return <LoadingState label="姝ｅ湪璇诲彇鎵ц缃戝叧璁板綍..." />
+    return <LoadingState label="正在读取执行网关记录..." />
   }
 
   return (
@@ -341,6 +356,9 @@ export function ExecutionGatewayPanel() {
                           </div>
                           <RecordMeta>
                             {record.intentTitle} | View Execution Timeline | {new Date(record.createdAt).toLocaleDateString()}
+                          </RecordMeta>
+                          <RecordMeta>
+                            Source: {record.sourceTaskId ?? 'manual'} | Correlation: {record.correlationId ?? 'unknown'} | Created by: {record.createdBy ?? 'operator'}
                           </RecordMeta>
                         </div>
                         <span className="text-xs text-slate-700">View Execution Audit</span>
@@ -416,8 +434,13 @@ export function ExecutionGatewayPanel() {
                   }`}
                 >
                   <p className="break-all">{run.correlationId}</p>
+                  <p className="mt-1 text-gray-500">Source: {run.source ?? 'unknown'} | Request: {run.requestStatus ?? 'unknown'}</p>
+                  <p className="mt-1 text-gray-500">{summarizeUserMessage(run.userMessage)}</p>
                   <p className="mt-1 text-gray-500">
                     {run.status} | agent tasks: {run.agentTaskRuns.length} | runtime: {run.runtimeExecutions.length}
+                  </p>
+                  <p className="mt-1 text-gray-500">
+                    Failure: {run.failureSummary?.failedAgentTaskRunIds.length ?? 0} | Withheld: {run.failureSummary?.withheldRuntimeExecutionIds.length ?? 0} | Denied: {run.failureSummary?.deniedRuntimeExecutionIds.length ?? 0}
                   </p>
                   <p className="mt-1 text-gray-500">Receipt: {run.latestReceiptStatus ?? 'pending'}</p>
                   <p className="mt-1 text-gray-500">View Replay</p>
@@ -430,6 +453,10 @@ export function ExecutionGatewayPanel() {
               <div className="rounded bg-white p-2 text-xs text-gray-700">
                 <p className="font-medium text-gray-900">Read-only Replay</p>
                 <p className="break-all">Run: {selectedRun.correlationId}</p>
+                <p className="mt-1 break-all">Request: {selectedRun.runRequestRecordId ?? 'not_created'}</p>
+                <p className="mt-1">Source: {selectedRun.source ?? 'unknown'}</p>
+                <p className="mt-1">Request status: {selectedRun.requestStatus ?? 'unknown'}</p>
+                <p className="mt-1 text-gray-500">{selectedRun.userMessage ?? 'No user message recorded.'}</p>
                 <p className="mt-1">Status: {selectedRun.status}</p>
                 <p className="mt-1">Orchestrator: {selectedRun.orchestrator ?? 'unknown'}</p>
                 <p className="mt-1">Started: {selectedRun.startedAt ? new Date(selectedRun.startedAt).toLocaleString() : 'unknown'}</p>
@@ -466,6 +493,16 @@ export function ExecutionGatewayPanel() {
                   <p className="mt-1 text-gray-500">{event.reason}</p>
                 </div>
               ))}
+              <div className="rounded bg-white p-2 text-xs text-gray-700">
+                <p className="font-medium text-gray-900">Read-only Failure Review</p>
+                <p className="mt-1 text-gray-500">Failure Drill-down</p>
+                <p className="mt-1">Has failure: {String(selectedRun.failureSummary?.hasFailure ?? false)}</p>
+                <p className="mt-1 break-all text-gray-500">Failed agent tasks: {(selectedRun.failureSummary?.failedAgentTaskRunIds ?? []).join(', ') || 'none'}</p>
+                <p className="mt-1 break-all text-gray-500">Failed runtime executions: {(selectedRun.failureSummary?.failedRuntimeExecutionIds ?? []).join(', ') || 'none'}</p>
+                <p className="mt-1 break-all text-gray-500">Withheld runtime executions: {(selectedRun.failureSummary?.withheldRuntimeExecutionIds ?? []).join(', ') || 'none'}</p>
+                <p className="mt-1 break-all text-gray-500">Denied runtime executions: {(selectedRun.failureSummary?.deniedRuntimeExecutionIds ?? []).join(', ') || 'none'}</p>
+                <p className="mt-1 text-gray-500">Latest failure reason: {selectedRun.failureSummary?.latestFailureReason ?? 'none'}</p>
+              </div>
             </div>
           )}
           <div className="mt-4 space-y-2">
@@ -498,4 +535,9 @@ export function ExecutionGatewayPanel() {
       </div>
     </PanelShell>
   )
+}
+
+function summarizeUserMessage(message: string | null): string {
+  if (!message) return 'No request summary.'
+  return message.length > 48 ? `${message.slice(0, 48)}...` : message
 }

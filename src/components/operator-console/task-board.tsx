@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { EmptyState, LoadingState, PanelShell, StatusBadge } from './ui'
 
@@ -49,10 +50,13 @@ export function TaskBoard() {
   }, [])
 
   const filtered = filter === 'all' ? tasks : tasks.filter((task) => task.status === filter)
-  const statusCounts = tasks.reduce((acc, task) => {
-    acc[task.status] = (acc[task.status] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
+  const statusCounts = tasks.reduce(
+    (acc, task) => {
+      acc[task.status] = (acc[task.status] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>
+  )
 
   if (loading) {
     return <LoadingState label="正在读取本地任务记录..." />
@@ -91,7 +95,10 @@ export function TaskBoard() {
 
       <div className="max-h-96 overflow-y-auto">
         {filtered.length === 0 ? (
-          <EmptyState title="暂无任务记录" description="ChatHub 产生本地 Task 后，这里会展示任务状态、建议 Agent 和审计入口。" />
+          <EmptyState
+            title="暂无任务记录"
+            description="ChatHub 产生本地 Task 后，这里会展示任务状态、建议 Agent 和审计入口。"
+          />
         ) : (
           <div className="divide-y divide-gray-100">
             {filtered.map((task) => (
@@ -109,6 +116,12 @@ export function TaskBoard() {
                     )}
                     <span>{(task.confidence * 100).toFixed(0)}%</span>
                     <span>{new Date(task.createdAt).toLocaleDateString()}</span>
+                    <Link
+                      href={`/operator?runtimeTaskId=${encodeURIComponent(task.id)}`}
+                      className="text-slate-700 underline-offset-2 hover:underline"
+                    >
+                      View Runtime Status
+                    </Link>
                   </div>
                 </div>
               </div>

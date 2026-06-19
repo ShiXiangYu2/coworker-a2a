@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { EmptyState, LoadingState, PanelShell, StatusBadge } from './ui'
+import { EmptyState, ErrorState, LoadingState, PanelShell, RefreshButton, StatusBadge } from './ui'
 
 interface EvalRun {
   id: string
@@ -17,18 +17,23 @@ interface EvalRun {
 export function EvalPanel() {
   const [runs, setRuns] = useState<EvalRun[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function fetchRuns() {
+    setError(null)
     try {
       const res = await fetch('/api/eval-runs')
-      if (res.ok) {
-        const data = await res.json()
-        setRuns(data.data ?? [])
+      if (!res.ok) {
+        throw new Error('读取质量评估记录失败')
       }
+      const data = await res.json()
+      setRuns(data.data ?? [])
     } catch {
-      // Keep this recommendation-only panel non-blocking.
+      setError('读取质量评估记录失败，请稍后重试。')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -54,7 +59,34 @@ export function EvalPanel() {
     <PanelShell
       title="质量评估"
       description={`${runs.length} 条 EvalRun 记录。评估结果只能作为 recommendation / evidence，不能作为执行、发布或部署许可。`}
+      action={
+        <RefreshButton
+          disabled={refreshing}
+          onClick={() => {
+            setRefreshing(true)
+            void fetchRuns()
+          }}
+        >
+          {refreshing ? '刷新中...' : '刷新'}
+        </RefreshButton>
+      }
     >
+      {error && (
+        <ErrorState
+          message={error}
+          action={
+            <RefreshButton
+              disabled={refreshing}
+              onClick={() => {
+                setRefreshing(true)
+                void fetchRuns()
+              }}
+            >
+              重试
+            </RefreshButton>
+          }
+        />
+      )}
       <div className="max-h-96 overflow-y-auto p-4">
         {Object.keys(grouped).length === 0 ? (
           <EmptyState title="暂无质量评估记录" description="生成本地 EvalRun 后，这里会按目标类型展示 recommendation-only 评估结果。" />
@@ -64,7 +96,7 @@ export function EvalPanel() {
               <div key={targetType} className="rounded-lg border border-gray-200 p-3">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="break-words text-sm font-semibold text-gray-900">{targetType}</span>
-                  <span className="text-xs text-gray-500">{evalRuns.length} runs</span>
+                  <span className="text-xs text-gray-500">{evalRuns.length} 条记录</span>
                 </div>
                 <div className="space-y-2">
                   {evalRuns.slice(0, 5).map((run) => (
