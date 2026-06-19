@@ -26,7 +26,10 @@ import {
 import { POST as createToken, GET as listTokens } from '../tokens/route'
 import { GET as getToken } from '../tokens/[id]/route'
 import { POST as createJob, GET as listJobs } from '../jobs/route'
+<<<<<<< HEAD
 import { POST as createApprovedPlanJob } from '../jobs/from-approved-plan/route'
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
 import { POST as seedSampleJob } from '../seed-sample-job/route'
 import { GET as getJob } from '../jobs/[id]/route'
 import { GET as getJobTimeline } from '../jobs/[id]/timeline/route'
@@ -153,8 +156,11 @@ vi.mock('@/lib/runtime-execution', async () => {
           recoveryCount: 1,
           isTerminal: true,
           leaseActive: false,
+<<<<<<< HEAD
           issuedRuntimeTokenActive: false,
           awaitingRuntimeExecution: false,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
         },
         safetyNote,
       }
@@ -180,7 +186,10 @@ vi.mock('@/lib/runtime-execution', async () => {
         derived: {
           hasAnyLiveJob: false,
           hasAnySucceededJob: false,
+<<<<<<< HEAD
           hasAnyAwaitingRuntimeExecution: false,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
           latestJobId: null,
         },
         safetyNote,
@@ -201,8 +210,11 @@ vi.mock('@/lib/runtime-execution', async () => {
               recoveryCount: 0,
               isTerminal: false,
               leaseActive: false,
+<<<<<<< HEAD
               issuedRuntimeTokenActive: true,
               awaitingRuntimeExecution: true,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
             },
             safetyNote,
           },
@@ -224,7 +236,10 @@ vi.mock('@/lib/runtime-execution', async () => {
         derived: {
           hasAnyLiveJob: true,
           hasAnySucceededJob: false,
+<<<<<<< HEAD
           hasAnyAwaitingRuntimeExecution: true,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
           latestJobId: 'job-1',
         },
         safetyNote,
@@ -251,7 +266,10 @@ vi.mock('@/lib/runtime-execution', async () => {
         derived: {
           hasAnyLiveJob: false,
           hasAnySucceededJob: false,
+<<<<<<< HEAD
           hasAnyAwaitingRuntimeExecution: false,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
           latestJobId: null,
         },
         safetyNote,
@@ -267,7 +285,10 @@ vi.mock('@/lib/runtime-execution', async () => {
       },
       highlight: {
         primaryStatus: 'empty',
+<<<<<<< HEAD
         primaryHint: null,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
         latestJobId: null,
         latestReceiptStatus: null,
         hasActionableLiveJob: false,
@@ -573,6 +594,7 @@ describe('Sprint 22 Runtime API', () => {
     expect(seedRuntimeSampleJob).not.toHaveBeenCalled()
   })
 
+<<<<<<< HEAD
   it('issues an active runtime token and queued job from an approved low-risk plan input', async () => {
     const response = await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', {
       taskId: 'task-1',
@@ -686,6 +708,8 @@ describe('Sprint 22 Runtime API', () => {
     expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
   })
 
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
   it('queries token/job by id and task-linked jobs', async () => {
     const token = await getToken(new Request('http://localhost/api/runtime/tokens/token-1'), {
       params: Promise.resolve({ id: 'token-1' }),
@@ -719,7 +743,10 @@ describe('Sprint 22 Runtime API', () => {
     expect(body.data.derived).toEqual({
       hasAnyLiveJob: true,
       hasAnySucceededJob: false,
+<<<<<<< HEAD
       hasAnyAwaitingRuntimeExecution: true,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
       latestJobId: 'job-1',
     })
     expect(body.safetyNote).toContain('Sprint 22')
@@ -813,8 +840,11 @@ describe('Sprint 22 Runtime API', () => {
       recoveryCount: 1,
       isTerminal: true,
       leaseActive: false,
+<<<<<<< HEAD
       issuedRuntimeTokenActive: false,
       awaitingRuntimeExecution: false,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
     })
     expect(body.safetyNote).toContain('Sprint 22')
     expect(getRuntimeDispatchJobTimeline).toHaveBeenCalledWith('job-1')

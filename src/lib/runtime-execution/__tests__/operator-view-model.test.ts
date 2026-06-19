@@ -23,7 +23,10 @@ vi.mock('../task-summary', () => ({
       derived: {
         hasAnyLiveJob: false,
         hasAnySucceededJob: false,
+<<<<<<< HEAD
         hasAnyAwaitingRuntimeExecution: false,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
         latestJobId: null,
       },
       safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
@@ -44,8 +47,11 @@ vi.mock('../task-summary', () => ({
             recoveryCount: 0,
             isTerminal: false,
             leaseActive: false,
+<<<<<<< HEAD
             issuedRuntimeTokenActive: true,
             awaitingRuntimeExecution: true,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
           },
           safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
         },
@@ -62,8 +68,11 @@ vi.mock('../task-summary', () => ({
             recoveryCount: 1,
             isTerminal: true,
             leaseActive: false,
+<<<<<<< HEAD
             issuedRuntimeTokenActive: false,
             awaitingRuntimeExecution: false,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
           },
           safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
         },
@@ -80,8 +89,11 @@ vi.mock('../task-summary', () => ({
             recoveryCount: 1,
             isTerminal: true,
             leaseActive: false,
+<<<<<<< HEAD
             issuedRuntimeTokenActive: true,
             awaitingRuntimeExecution: false,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
           },
           safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
         },
@@ -103,7 +115,10 @@ vi.mock('../task-summary', () => ({
       derived: {
         hasAnyLiveJob: true,
         hasAnySucceededJob: true,
+<<<<<<< HEAD
         hasAnyAwaitingRuntimeExecution: true,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
         latestJobId: 'job-succeeded',
       },
       safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
@@ -141,7 +156,10 @@ describe('Sprint 22 runtime operator view-model adapter', () => {
     expect(result.statusBands.failed).toHaveLength(1)
     expect(result.highlight).toEqual({
       primaryStatus: 'failed',
+<<<<<<< HEAD
       primaryHint: 'issued_runtime_token_active_waiting_execution',
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
       latestJobId: 'job-succeeded',
       latestReceiptStatus: 'dry_run',
       hasActionableLiveJob: true,
@@ -166,7 +184,10 @@ describe('Sprint 22 runtime operator view-model adapter', () => {
     })
     expect(result.highlight).toEqual({
       primaryStatus: 'empty',
+<<<<<<< HEAD
       primaryHint: null,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
       latestJobId: null,
       latestReceiptStatus: null,
       hasActionableLiveJob: false,

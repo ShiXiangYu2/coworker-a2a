@@ -72,7 +72,10 @@ This checklist freezes the current Sprint 22 minimum controlled runtime executio
 
 - [x] Runtime token create/query APIs exist.
 - [x] Runtime job create/query APIs exist.
+<<<<<<< HEAD
 - [x] Approved-plan issuance API exists for one low-risk Obsidian token + queued job.
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
 - [x] Worker-facing lease/start/fail/block APIs exist.
 - [x] Dry-run and controlled Obsidian completion APIs exist.
 - [x] Attempts query API exists.

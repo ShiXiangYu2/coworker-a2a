@@ -13,7 +13,10 @@ export interface RuntimeOperatorStatusBands {
 
 export interface RuntimeOperatorHighlight {
   primaryStatus: string
+<<<<<<< HEAD
   primaryHint: string | null
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
   latestJobId: string | null
   latestReceiptStatus: string | null
   hasActionableLiveJob: boolean
@@ -53,7 +56,10 @@ export async function buildRuntimeOperatorTaskViewModel(taskId: string): Promise
     blocked: summary.jobs.filter((timeline) => timeline.job?.status === 'blocked'),
     failed: summary.jobs.filter((timeline) => timeline.job?.status === 'failed'),
   }
+<<<<<<< HEAD
   const hasAwaitingRuntimeExecution = statusBands.live.some((timeline) => timeline.derived.awaitingRuntimeExecution)
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
 
   return {
     taskId: summary.taskId,
@@ -64,7 +70,10 @@ export async function buildRuntimeOperatorTaskViewModel(taskId: string): Promise
     statusBands,
     highlight: {
       primaryStatus: primaryStatusFrom(summary),
+<<<<<<< HEAD
       primaryHint: hasAwaitingRuntimeExecution ? 'issued_runtime_token_active_waiting_execution' : null,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
       latestJobId: summary.derived.latestJobId,
       latestReceiptStatus: latestJob?.receipt?.status ?? null,
       hasActionableLiveJob: statusBands.live.some((timeline) => !timeline.derived.hasReceipt),

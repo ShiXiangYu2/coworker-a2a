@@ -54,8 +54,11 @@ vi.mock('../timeline', () => ({
         recoveryCount: 0,
         isTerminal: statusByJobId[jobId] !== 'queued',
         leaseActive: false,
+<<<<<<< HEAD
         issuedRuntimeTokenActive: true,
         awaitingRuntimeExecution: statusByJobId[jobId] === 'queued' && !receiptByJobId[jobId],
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
       },
       safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
     }
@@ -94,7 +97,10 @@ describe('Sprint 22 task runtime execution summary', () => {
     expect(result.derived).toEqual({
       hasAnyLiveJob: true,
       hasAnySucceededJob: true,
+<<<<<<< HEAD
       hasAnyAwaitingRuntimeExecution: true,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
       latestJobId: 'job-blocked',
     })
   })
@@ -111,7 +117,10 @@ describe('Sprint 22 task runtime execution summary', () => {
     expect(result.derived).toEqual({
       hasAnyLiveJob: false,
       hasAnySucceededJob: false,
+<<<<<<< HEAD
       hasAnyAwaitingRuntimeExecution: false,
+=======
+>>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
       latestJobId: null,
     })
   })
