@@ -289,7 +289,6 @@ describe('Sprint 18-21 Operator Console Safety', () => {
     expect(source).toContain('RuntimeExecutionPanel')
     expect(source).toContain('runtimeTaskId')
     expect(source).toContain('searchParams')
-    expect(source).toContain('?runtimeTaskId=<task-id>')
     expect(source).toContain('taskId={runtimeTaskId}')
     expect(source).not.toContain('/api/runtime/jobs/claim')
     expect(source).not.toContain('/complete-dry-run')

@@ -57,7 +57,8 @@ export async function executeRecordedAgentTask(
     const result = await executeAgentTask(
       input.agentId,
       input.taskDescription,
-      input.previousResults
+      input.previousResults,
+      { allowDirectToolExecution: false }
     )
     const completedAt = new Date()
     const status = result.status === 'completed' ? 'completed' : 'failed'
@@ -78,6 +79,24 @@ export async function executeRecordedAgentTask(
       },
     })
 
+    if (result.blockedToolRequests?.length) {
+      await writeAgentTaskAuditEvent({
+        correlationId: input.correlationId,
+        eventType: 'agent_task.tool_request_blocked',
+        actorId: input.agentId,
+        beforeStatus: 'started',
+        afterStatus: status,
+        reason: 'Agent requested direct tool execution; request was withheld for Kelvin approval.',
+        payload: {
+          agentTaskRunRecordId: record.id,
+          taskId: input.taskId,
+          taskType: input.taskType,
+          blockedToolRequests: result.blockedToolRequests,
+          proposedActionSummary: result.proposedActionSummary ?? null,
+        },
+      })
+    }
+
     await writeAgentTaskAuditEvent({
       correlationId: input.correlationId,
       eventType: status === 'completed' ? 'agent_task.completed' : 'agent_task.failed',
@@ -92,6 +111,9 @@ export async function executeRecordedAgentTask(
         taskId: input.taskId,
         taskType: input.taskType,
         status: result.status,
+        blockedToolRequests: result.blockedToolRequests ?? [],
+        requiresApproval: result.requiresApproval ?? false,
+        proposedActionSummary: result.proposedActionSummary ?? null,
       },
     })
 
@@ -134,7 +156,11 @@ export async function executeRecordedAgentTask(
 
 async function writeAgentTaskAuditEvent(input: {
   correlationId: string
-  eventType: 'agent_task.started' | 'agent_task.completed' | 'agent_task.failed'
+  eventType:
+    | 'agent_task.started'
+    | 'agent_task.completed'
+    | 'agent_task.failed'
+    | 'agent_task.tool_request_blocked'
   actorId: string
   beforeStatus?: string
   afterStatus: string

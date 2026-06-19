@@ -267,6 +267,48 @@ describe('runs repository', () => {
     expect(run.timelineEvents[0]?.eventType).toBe('agent_task.started')
   })
 
+  it('keeps blocked tool requests inside agent runs without runtime executions', async () => {
+    vi.mocked(getRunRequestByCorrelationId).mockResolvedValueOnce({
+      ...runRequest,
+      id: 'run-request-chat-blocked-tool',
+      correlationId: 'corr-chat-blocked-tool',
+      source: 'chathub',
+      userMessage: 'needs a tool request',
+      orchestrator: 'route_engine',
+      status: 'running',
+    })
+    vi.mocked(listAgentTaskRunRecordsByCorrelationId).mockResolvedValueOnce([
+      {
+        ...agentRuns[0],
+        id: 'agent-run-chat-blocked-tool',
+        correlationId: 'corr-chat-blocked-tool',
+        orchestrator: 'route_engine',
+        agentId: 'jobs',
+        taskId: 'chathub-single-agent',
+        taskType: 'chat_single_agent',
+        status: 'completed',
+      },
+    ])
+    vi.mocked(listRuntimeExecutionRecordsByCorrelationId).mockResolvedValueOnce([])
+    vi.mocked(listAuditEvents).mockResolvedValueOnce([
+      {
+        ...timelineEvents[0],
+        id: 'audit-chat-blocked-tool',
+        correlationId: 'corr-chat-blocked-tool',
+        eventType: 'agent_task.tool_request_blocked',
+        actorType: 'agent',
+        reason: 'Agent requested direct tool execution; request was withheld for Kelvin approval.',
+      },
+    ])
+
+    const run = await getRunByCorrelationId({ correlationId: 'corr-chat-blocked-tool' })
+
+    expect(run.source).toBe('chathub')
+    expect(run.agentTaskRuns).toHaveLength(1)
+    expect(run.runtimeExecutions).toHaveLength(0)
+    expect(run.timelineEvents[0]?.eventType).toBe('agent_task.tool_request_blocked')
+  })
+
   it('derives failed and withheld statuses', async () => {
     vi.mocked(getRunRequestByCorrelationId).mockResolvedValueOnce(null)
     vi.mocked(listAgentTaskRunRecordsByCorrelationId).mockResolvedValueOnce([

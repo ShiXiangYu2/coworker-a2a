@@ -8,6 +8,7 @@ import {
   EvalPanel,
   EvidencePanel,
   ExecutionGatewayPanel,
+  LatestRuntimeExecutionPanel,
   MultiAgentFlow,
   OperatorOverview,
   RuntimeExecutionPanel,
@@ -22,6 +23,17 @@ const closureStages = [
   'Execution Gateway',
   'Assignment Review',
   'Runtime Read-only View',
+]
+
+const consoleSections = [
+  { id: 'overview', label: '概览' },
+  { id: 'tasks', label: '任务与 Agent' },
+  { id: 'evidence', label: '证据与工具' },
+  { id: 'collaboration', label: '协作流' },
+  { id: 'department', label: '部门治理' },
+  { id: 'execution', label: '执行网关' },
+  { id: 'runtime', label: '运行时只读' },
+  { id: 'assignment', label: '归属评审' },
 ]
 
 function stringSearchParam(value: string | string[] | undefined): string | undefined {
@@ -60,6 +72,20 @@ export default async function OperatorConsole({
       </header>
 
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
+        <nav className="sticky top-0 z-10 -mx-4 border-y border-gray-200 bg-white/95 px-4 py-2 shadow-sm backdrop-blur">
+          <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto">
+            {consoleSections.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-950"
+              >
+                {section.label}
+              </a>
+            ))}
+          </div>
+        </nav>
+
         <section className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -81,7 +107,9 @@ export default async function OperatorConsole({
           </div>
         </section>
 
-        <OperatorOverview />
+        <section id="overview" className="scroll-mt-16">
+          <OperatorOverview />
+        </section>
 
         <section className="space-y-4">
           <div>
@@ -91,38 +119,54 @@ export default async function OperatorConsole({
             </p>
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
-            <TaskBoard />
-            <AgentStats />
+            <div id="tasks" className="scroll-mt-16">
+              <TaskBoard />
+            </div>
+            <div className="scroll-mt-16">
+              <AgentStats />
+            </div>
             <AuditTimeline />
             <EvalPanel />
-            <EvidencePanel />
+            <div id="evidence" className="scroll-mt-16">
+              <EvidencePanel />
+            </div>
             <ToolBoundaryPanel />
-            <div className="xl:col-span-2">
+            <div id="collaboration" className="scroll-mt-16 xl:col-span-2">
               <MultiAgentFlow />
             </div>
-            <div className="xl:col-span-2">
+            <div id="department" className="scroll-mt-16 xl:col-span-2">
               <DepartmentPanel />
             </div>
             <div className="xl:col-span-2">
               <DepartmentEvidenceMapPanel />
             </div>
-            <div className="xl:col-span-2">
+            <div id="execution" className="scroll-mt-16 xl:col-span-2">
               <ExecutionGatewayPanel />
             </div>
-            <div className="xl:col-span-2">
+            <div id="runtime" className="scroll-mt-16 xl:col-span-2">
               <div className="space-y-3">
                 <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
                   <div className="text-sm font-semibold text-gray-950">Runtime Execution Task Filter</div>
                   <p className="mt-1 break-words text-sm text-gray-600">
-                    {runtimeTaskId
-                      ? `Showing Sprint 22 read-only runtime view for task ${runtimeTaskId}.`
-                      : 'No runtimeTaskId selected. Add ?runtimeTaskId=<task-id> to inspect one Sprint 22 runtime execution view.'}
+                    {runtimeTaskId ? (
+                      <>
+                      Showing Sprint 22 read-only runtime view for task {runtimeTaskId}.
+                      </>
+                    ) : (
+                      <>
+                        No runtimeTaskId selected. Add ?runtimeTaskId=&lt;task-id&gt; to inspect one Sprint 22 runtime execution view, or use the automatic latest-task view below.
+                      </>
+                    )}
                   </p>
                 </div>
-                <RuntimeExecutionPanel taskId={runtimeTaskId} />
+                {runtimeTaskId ? (
+                  <RuntimeExecutionPanel taskId={runtimeTaskId} />
+                ) : (
+                  <LatestRuntimeExecutionPanel />
+                )}
               </div>
             </div>
-            <div className="xl:col-span-2">
+            <div id="assignment" className="scroll-mt-16 xl:col-span-2">
               <DepartmentAssignmentPanel />
             </div>
           </div>

@@ -101,6 +101,7 @@ export type HarmonyAuditEventType =
   | 'agent_task.started'
   | 'agent_task.completed'
   | 'agent_task.failed'
+  | 'agent_task.tool_request_blocked'
   | 'chathub.request_received'
   | 'chathub.route_decided'
   | 'chathub.response_completed'

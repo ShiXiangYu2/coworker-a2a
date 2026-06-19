@@ -10,6 +10,10 @@ This runbook covers the current minimal loop:
 2. Run one job once in dry-run mode, or explicitly run the single Obsidian connector path.
 3. Inspect attempts, receipt, and recovery points.
 
+For the end-to-end Operator panel handoff flow, see `docs/runtime-panel-smoke-flow.md`.
+
+For the phase acceptance gate, see `docs/sprint-22-acceptance-checklist.md`.
+
 ## Safety Boundary
 
 Runtime permission exists only through `RuntimeExecutionToken`.
