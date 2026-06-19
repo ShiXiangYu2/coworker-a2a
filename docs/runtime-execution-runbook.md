@@ -162,6 +162,11 @@ GET /api/runtime/jobs/<job-id>/timeline
 
 This is a read-only operator/developer summary API. It returns the job, token, attempts, receipt, recovery points, and derived status metadata such as `hasReceipt`, `receiptStatus`, `attemptCount`, `recoveryCount`, `isTerminal`, and `leaseActive`. It does not mutate runtime state or execute any connector.
 
+To keep the current data model honest, Sprint 22 now exposes conservative issuance visibility hints rather than claiming it can always distinguish seed-created jobs from approved-plan-created jobs. Timeline derived fields may include:
+
+- `issuedRuntimeTokenActive`
+- `awaitingRuntimeExecution`
+
 Task runtime summary:
 
 ```http
@@ -179,6 +184,8 @@ GET /api/tasks/<task-id>/runtime-operator-view
 ```
 
 This endpoint is a read-only operator-facing adapter over the task runtime summary. It returns `summary`, `latestJob`, `latestReceipt`, `statusBands`, and `highlight` fields for future Operator Console consumption. It does not claim jobs, run workers, complete jobs, or execute connectors.
+
+The operator view `highlight` may include a `primaryHint` when a queued job has an active runtime token and is still awaiting execution. This is a read-only observability hint, not an execution control or approval surface.
 
 Operator Console runtime panel:
 
