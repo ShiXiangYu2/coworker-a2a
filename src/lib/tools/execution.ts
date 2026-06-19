@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto'
+import { writeSandboxDeliverable } from '@/lib/sandbox/file-write-sandbox'
+import { sprint22FileWriteProfile } from '@/lib/sandbox/file-write-sandbox'
 import type {
   ToolCall,
   ToolDefinition,
@@ -53,6 +55,28 @@ export const defaultToolExecutionPolicy: ToolExecutionPolicy = {
   updatedAt: createdAt,
 }
 
+export const sprint22ToolExecutionPolicy: ToolExecutionPolicy = {
+  ...defaultToolExecutionPolicy,
+  id: 'tool-execution-policy-sprint-22',
+  policyVersion: 'sprint-22.0',
+  allowedToolCategories: ['write_sandbox'],
+  deniedToolCategories: [
+    'read',
+    'write',
+    'command',
+    'git',
+    'pr',
+    'deploy',
+    'database',
+    'external_api',
+    'mcp',
+    'browser',
+    'file_read',
+    'database_migration',
+  ],
+  requireDeterministicOutput: false,
+}
+
 export const defaultToolSandbox: ToolSandbox = {
   id: 'local-deterministic-sandbox-sprint-11',
   sandboxVersion: 'sprint-11.0',
@@ -74,6 +98,13 @@ export const defaultToolSandbox: ToolSandbox = {
   maxOutputSizeChars: 12000,
   createdAt,
   updatedAt: createdAt,
+}
+
+export const sprint22FileWriteSandbox: ToolSandbox = {
+  ...defaultToolSandbox,
+  id: sprint22FileWriteProfile.id,
+  sandboxVersion: 'sprint-22.0',
+  allowFileWrite: true as false,
 }
 
 export const toolExecutors: ToolExecutor[] = [
@@ -113,6 +144,24 @@ export const toolExecutors: ToolExecutor[] = [
     createdAt,
     updatedAt: createdAt,
   },
+  {
+    id: 'write_sandbox_deliverable.executor',
+    executorVersion: 'sprint-22.0',
+    toolId: 'write.sandbox_deliverable',
+    toolCategory: 'write_sandbox',
+    executionMode: 'deterministic_local',
+    enabled: true,
+    sandboxId: sprint22FileWriteSandbox.id,
+    policyId: sprint22ToolExecutionPolicy.id,
+    maxInputSizeChars: 12000,
+    maxOutputSizeChars: 12000,
+    timeoutMs: 1000,
+    idempotencyRequired: true,
+    sideEffectClass: 'sandbox_file_write',
+    deterministicOutputRequired: true,
+    createdAt,
+    updatedAt: createdAt,
+  },
 ]
 
 export class ToolExecutionGuardError extends Error {
@@ -126,6 +175,10 @@ export function getToolExecutionPolicy(): ToolExecutionPolicy {
   return defaultToolExecutionPolicy
 }
 
+export function getPolicyForToolCategory(category: ToolDefinition['category']): ToolExecutionPolicy {
+  return category === 'write_sandbox' ? sprint22ToolExecutionPolicy : defaultToolExecutionPolicy
+}
+
 export function listToolExecutors(): ToolExecutor[] {
   return toolExecutors
 }
@@ -135,11 +188,11 @@ export function getToolExecutor(id: string): ToolExecutor | null {
 }
 
 export function listToolSandboxes(): ToolSandbox[] {
-  return [defaultToolSandbox]
+  return [defaultToolSandbox, sprint22FileWriteSandbox]
 }
 
 export function getToolSandbox(id: string): ToolSandbox | null {
-  return id === defaultToolSandbox.id ? defaultToolSandbox : null
+  return listToolSandboxes().find((sandbox) => sandbox.id === id) ?? null
 }
 
 export function stableHash(value: unknown): string {
@@ -147,6 +200,29 @@ export function stableHash(value: unknown): string {
 }
 
 export function validateToolSandbox(sandbox: ToolSandbox): void {
+  if (sandbox.id === sprint22FileWriteSandbox.id) {
+    const forbidden: Array<keyof ToolSandbox> = [
+      'allowShell',
+      'allowGit',
+      'allowFileRead',
+      'allowNetwork',
+      'allowExternalApi',
+      'allowMcp',
+      'allowBrowser',
+      'allowDatabaseMigration',
+      'allowEnvironmentRead',
+      'allowQueue',
+      'allowWorker',
+    ]
+    const allowed = forbidden.filter((key) => sandbox[key] !== false)
+    if (allowed.length > 0) {
+      throw new ToolExecutionGuardError(`ToolSandbox allows forbidden capabilities: ${allowed.join(', ')}`)
+    }
+    if (!sandbox.allowFileWrite) {
+      throw new ToolExecutionGuardError('Sprint 22 file-write sandbox must explicitly allow bounded file write.')
+    }
+    return
+  }
   const forbidden: Array<keyof ToolSandbox> = [
     'allowShell',
     'allowGit',
@@ -176,12 +252,16 @@ export function validateExecutionPolicy(
     throw new ToolExecutionGuardError('ToolExecutionPolicy is not active default-deny.')
   }
   if (!policy.allowedToolCategories.includes(executor.toolCategory)) {
-    throw new ToolExecutionGuardError('Tool category is not allowed for Sprint 11 execution.')
+    throw new ToolExecutionGuardError('Tool category is not allowed for this execution policy.')
   }
   if (policy.deniedToolCategories.includes(tool.category)) {
     throw new ToolExecutionGuardError(`Tool category ${tool.category} is explicitly denied.`)
   }
-  if (!['internal_noop', 'read_simulated'].includes(tool.category)) {
+  if (policy.id === sprint22ToolExecutionPolicy.id) {
+    if (tool.category !== 'write_sandbox' || executor.sideEffectClass !== 'sandbox_file_write') {
+      throw new ToolExecutionGuardError('Only write_sandbox can execute in Sprint 22 sandbox policy.')
+    }
+  } else if (!['internal_noop', 'read_simulated'].includes(tool.category)) {
     throw new ToolExecutionGuardError(`Tool category ${tool.category} cannot execute in Sprint 11.`)
   }
   if (
@@ -232,7 +312,10 @@ export function validateExecutionPreconditions(input: {
     throw new ToolExecutionGuardError('ToolExecutionPlan must be approved_record.')
   }
   if (!input.plan.idempotencyKey) throw new ToolExecutionGuardError('idempotencyKey is required.')
-  if (input.plan.expectedSideEffects.length !== 0) {
+  if (
+    input.plan.expectedSideEffects.length !== 0 &&
+    input.plan.sideEffectClass !== 'sandbox_file_write'
+  ) {
     throw new ToolExecutionGuardError('ToolExecutionPlan expectedSideEffects must be empty.')
   }
   if (!input.recoveryPoint || input.recoveryPoint.reason !== 'before_tool_execution') {
@@ -249,8 +332,37 @@ export function validateToolResult(result: ToolResult): void {
   if (result.sideEffects.length !== 0) {
     throw new ToolExecutionGuardError('ToolResult.sideEffects must be empty.')
   }
-  if (result.sideEffectClass && !['none', 'simulated_read'].includes(result.sideEffectClass)) {
+  if (result.sideEffectClass && !['none', 'simulated_read', 'sandbox_file_write'].includes(result.sideEffectClass)) {
     throw new ToolExecutionGuardError('Invalid sideEffectClass.')
+  }
+}
+
+export async function executeSandboxFileWriteTool(input: {
+  toolRun: ToolRun
+  toolCall: ToolCall
+  plan: ToolExecutionPlan
+}): Promise<{
+  result: ToolResult
+  resultSnapshot: Record<string, unknown>
+}> {
+  const written = await writeSandboxDeliverable(input.toolCall.input)
+  const resultSnapshot = {
+    kind: 'sandbox_file_write',
+    toolId: input.toolRun.toolId,
+    sandboxProfileId: written.sandboxProfileId,
+    allowedWriteRoot: written.allowedRoot,
+    outputPath: written.outputPath,
+    relativePath: written.relativePath,
+    extension: written.extension,
+    bytesWritten: written.bytesWritten,
+    contentHash: written.contentHash,
+    normalizedInputHash: input.plan.normalizedInputHash,
+    policyVersion: input.plan.policyVersion,
+    executorVersion: input.plan.executorVersion,
+  }
+  return {
+    result: buildSuccessResult(input, resultSnapshot, 'Approved sandbox deliverable write succeeded.'),
+    resultSnapshot,
   }
 }
 
