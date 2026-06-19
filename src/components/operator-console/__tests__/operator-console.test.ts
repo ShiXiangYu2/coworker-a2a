@@ -130,6 +130,29 @@ describe('v1 frontend closure polish', () => {
     }
   })
 
+  it('loads OperatorOverview from the structured overview API without mutation controls', () => {
+    const source = readOperatorSource('operator-overview.tsx')
+
+    expect(source).toContain('/api/operator/overview?limit=5')
+    expect(source).toContain('OperatorOverviewReadModel')
+    expect(source).toContain('Active Runtime')
+    expect(source).toContain('Blocked Summary')
+    expect(source).toContain('Recent Receipts')
+    expect(source).toContain('read-only derived view')
+    expect(source).not.toContain('/api/conversations')
+    expect(source).not.toContain('/api/harmony/tasks')
+    expect(source).not.toContain('/api/audit/agent-runs')
+    expect(source).not.toContain('/api/tool-calls')
+    expect(source).not.toContain('/api/eval-runs')
+    expect(source).not.toContain('/api/workflow-proposals')
+    expect(source).not.toContain('<button')
+    expect(source).not.toContain('/claim')
+    expect(source).not.toContain('/run-once')
+    expect(source).not.toContain('/complete')
+    expect(source).not.toContain('/retry')
+    expect(source).not.toContain('/approve')
+  })
+
   it('removes mojibake from key frontend surfaces', () => {
     const files = [
       join(process.cwd(), 'README.md'),
@@ -286,6 +309,24 @@ describe('Sprint 18-21 Operator Console Safety', () => {
     expect(source).not.toContain('complete-obsidian-write')
     expect(source).not.toContain('claimRuntime')
     expect(source).not.toContain('startRuntime')
+  })
+
+  it('loads MultiAgentFlow from the structured task flow API without assistant text parsing', () => {
+    const source = readOperatorSource('multi-agent-flow.tsx')
+
+    expect(source).toContain('/api/operator/task-flows?limit=5')
+    expect(source).toContain('OperatorTaskFlowReadModel')
+    expect(source).toContain('TaskFlowNodeCard')
+    expect(source).toContain('This view is read-only')
+    expect(source).not.toContain('/api/conversations')
+    expect(source).not.toContain('extractSteps')
+    expect(source).not.toContain('assistant')
+    expect(source).not.toContain('<button')
+    expect(source).not.toContain('/claim')
+    expect(source).not.toContain('/retry')
+    expect(source).not.toContain('/approve')
+    expect(source).not.toContain('/complete')
+    expect(source).not.toContain('onClick={() => void fetchTaskFlows()')
   })
 
   it('wires the runtime execution panel into the operator page through runtimeTaskId only', () => {

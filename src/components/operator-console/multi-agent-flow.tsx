@@ -1,147 +1,155 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { EmptyState, LoadingState, PanelShell, StatusBadge } from './ui'
+import { EmptyState, ErrorState, LoadingState, PanelShell, StatusBadge } from './ui'
+import type {
+  OperatorTaskFlowNode,
+  OperatorTaskFlowReadModel,
+} from '@/lib/operator-console/task-flow-read-model'
 
-interface Message {
-  id: string
-  role: string
-  content: string
-  createdAt: string
+type TaskFlowResponse =
+  | { ok: true; data: OperatorTaskFlowReadModel[] }
+  | { ok: false; error?: { message?: string } }
+
+const nodeLabels: Record<OperatorTaskFlowNode['type'], string> = {
+  task: 'Task',
+  agent_run: 'AgentRun',
+  workflow: 'Workflow',
+  runtime_job: 'RuntimeJob',
+  runtime_receipt: 'Receipt',
+  audit: 'Audit',
 }
 
-interface FlowStep {
-  type: 'decomposition' | 'agent_result' | 'summary'
-  agentId?: string
-  agentName?: string
-  title?: string
-  summary?: string
-  confidence?: number
-  status?: string
-  findings?: string[]
-}
-
-const agentColors: Record<string, string> = {
-  jobs: 'border-sky-300 bg-sky-50',
-  linus: 'border-emerald-300 bg-emerald-50',
-  turing: 'border-violet-300 bg-violet-50',
-  bezos: 'border-amber-300 bg-amber-50',
-}
-
-const agentLabels: Record<string, string> = {
-  jobs: 'Jobs',
-  linus: 'Linus',
-  turing: 'Turing',
-  bezos: 'Bezos',
+const nodeClasses: Record<OperatorTaskFlowNode['type'], string> = {
+  task: 'border-sky-200 bg-sky-50',
+  agent_run: 'border-emerald-200 bg-emerald-50',
+  workflow: 'border-violet-200 bg-violet-50',
+  runtime_job: 'border-amber-200 bg-amber-50',
+  runtime_receipt: 'border-teal-200 bg-teal-50',
+  audit: 'border-gray-200 bg-gray-50',
 }
 
 export function MultiAgentFlow() {
-  const [flows, setFlows] = useState<{ reasoning: string; steps: FlowStep[] }[]>([])
+  const [flows, setFlows] = useState<OperatorTaskFlowReadModel[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const extractSteps = useCallback((content: string): FlowStep[] => {
-    const steps: FlowStep[] = []
-    const agentPattern = /(?:Jobs|Linus|Turing|Bezos)\s*\((\w+)\)/g
-    let match
-    while ((match = agentPattern.exec(content)) !== null) {
-      const agentId = match[1].toLowerCase()
-      steps.push({
-        type: 'agent_result',
-        agentId,
-        agentName: match[0].split('(')[0].trim(),
-        summary: content.slice(match.index, Math.min(match.index + 100, content.length)),
-        status: 'completed',
-      })
-    }
-    return steps
-  }, [])
-
-  const fetchAndParse = useCallback(async () => {
+  const fetchTaskFlows = useCallback(async () => {
     try {
-      const convRes = await fetch('/api/conversations')
-      if (!convRes.ok) return
-      const conversations = await convRes.json()
+      setLoading(true)
+      setError(null)
 
-      const parsedFlows: { reasoning: string; steps: FlowStep[] }[] = []
-
-      for (const conv of (conversations ?? []).slice(0, 5)) {
-        const msgRes = await fetch(`/api/conversations/${conv.id}/messages`)
-        if (!msgRes.ok) continue
-        const messages: Message[] = await msgRes.json()
-
-        for (const msg of messages) {
-          if (msg.role !== 'assistant') continue
-          if (msg.content.includes('Multi-Agent') || msg.content.includes('多 Agent') || msg.content.includes('协作分析')) {
-            const steps = extractSteps(msg.content)
-            if (steps.length > 0) {
-              parsedFlows.push({
-                reasoning: `${msg.content.slice(0, 100)}...`,
-                steps,
-              })
-            }
-          }
-        }
+      const response = await fetch('/api/operator/task-flows?limit=5')
+      if (!response.ok) {
+        throw new Error(`Task flow API returned ${response.status}.`)
       }
 
-      setFlows(parsedFlows.slice(0, 5))
-    } catch {
-      // Derived view only.
+      const body = (await response.json()) as TaskFlowResponse
+      if (!body.ok) {
+        throw new Error(body.error?.message ?? 'Task flow API returned an error.')
+      }
+
+      setFlows(body.data)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to load task flows.')
     } finally {
       setLoading(false)
     }
-  }, [extractSteps])
+  }, [])
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      void fetchAndParse()
+      void fetchTaskFlows()
     }, 0)
     return () => window.clearTimeout(timeout)
-  }, [fetchAndParse])
+  }, [fetchTaskFlows])
 
   if (loading) {
-    return <LoadingState label="正在读取多 Agent 协作记录..." />
+    return <LoadingState label="Loading structured task flows..." />
+  }
+
+  if (error) {
+    return <ErrorState message={`Task flows unavailable: ${error}`} />
   }
 
   return (
     <PanelShell
-      title="多 Agent 协作流"
-      description={`${flows.length} 条最近协作记录。这里展示已产生的本地消息和分析结果，不启动新的 Agent 协作。`}
+      title="Multi-Agent Task Flow"
+      description={`${flows.length} recent structured task flow records. This view is read-only and does not start, claim, retry, approve, or complete any work.`}
     >
       <div className="max-h-96 overflow-y-auto p-4">
         {flows.length === 0 ? (
           <EmptyState
-            title="暂无多 Agent 协作记录"
-            description="在 ChatHub 中产生多 Agent 分析后，这里会展示最近的协作拆解和本地结果。"
+            title="No structured task flows yet"
+            description="When Harmony tasks, AgentRuns, runtime jobs, receipts, workflow proposals, or audit events exist, they will appear here as a read-only flow."
           />
         ) : (
           <div className="space-y-4">
-            {flows.map((flow, index) => (
-              <div key={index} className="rounded-lg border border-gray-200 p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="text-xs font-medium text-gray-500">Flow #{index + 1}</span>
-                  <StatusBadge status="review" />
-                </div>
-                <div className="mb-3 break-words text-sm leading-6 text-gray-700">{flow.reasoning}</div>
-                <div className="flex flex-wrap gap-2">
-                  {flow.steps.map((step, stepIndex) => (
-                    <div
-                      key={stepIndex}
-                      className={`min-w-0 rounded-lg border-2 px-3 py-2 text-xs ${agentColors[step.agentId ?? ''] ?? 'border-gray-200 bg-gray-50'}`}
-                    >
-                      <div className="font-semibold">
-                        {agentLabels[step.agentId ?? ''] ?? step.agentName ?? step.agentId}
-                      </div>
-                      {step.summary && (
-                        <div className="mt-1 max-w-48 truncate text-gray-600">{step.summary}</div>
-                      )}
+            {flows.map((flow) => (
+              <article key={flow.taskId} className="rounded-lg border border-gray-200 p-3">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate text-sm font-semibold text-gray-900">{flow.title}</h3>
+                      <StatusBadge status={flow.lifecycle.phase} />
                     </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Task {flow.taskId} | {flow.status} | {flow.lifecycle.reason}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                    {flow.nodes.length} nodes
+                  </span>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {flow.nodes.map((node) => (
+                    <TaskFlowNodeCard key={`${node.type}-${node.id}`} node={node} />
                   ))}
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}
       </div>
     </PanelShell>
   )
+}
+
+function TaskFlowNodeCard({ node }: { node: OperatorTaskFlowNode }) {
+  const metaEntries = Object.entries(node.meta ?? {}).filter(([, value]) => value !== null && value !== '')
+
+  return (
+    <div className={`min-w-0 rounded-lg border px-3 py-2 text-xs ${nodeClasses[node.type]}`}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="font-semibold text-gray-900">{nodeLabels[node.type]}</span>
+        <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 font-medium text-gray-600">
+          {node.status}
+        </span>
+      </div>
+      <div className="truncate font-medium text-gray-800">{node.title}</div>
+      {node.summary && (
+        <p className="mt-1 line-clamp-2 break-words leading-5 text-gray-600">{node.summary}</p>
+      )}
+      {node.createdAt && (
+        <p className="mt-2 text-[11px] text-gray-500">{formatTimestamp(node.createdAt)}</p>
+      )}
+      {metaEntries.length > 0 && (
+        <dl className="mt-2 space-y-1 text-[11px] text-gray-500">
+          {metaEntries.slice(0, 2).map(([key, value]) => (
+            <div key={key} className="flex min-w-0 gap-1">
+              <dt className="shrink-0 font-medium">{key}:</dt>
+              <dd className="truncate">{String(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  )
+}
+
+function formatTimestamp(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
 }
