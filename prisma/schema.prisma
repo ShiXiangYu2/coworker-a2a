@@ -597,6 +597,10 @@ model ToolExecutionPlan {
   evalRunIdsJson                String?
   regressionGateId              String?
   releaseReadinessChecklistId   String?
+  sandboxProfileId              String?
+  allowedWriteRoot              String?
+  allowedExtensionsJson         String?
+  expectedOutputPath            String?
   expiresAt                     DateTime?
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
@@ -634,6 +638,9 @@ model ToolExecutionReceipt {
   sideEffectClass         String
   reversibility           String
   simulatedReadsJson      String?
+  sandboxExecutionRecordId String?
+  outputPath              String?
+  bytesWritten            Int?
   auditEventIdsJson       String
   observabilityEventIdsJson String
   recoveryPointId         String
@@ -2909,6 +2916,27 @@ model ExecutionReceiptRecord {
   @@index([correlationId])
   @@index([createdAt])
   @@map("execution_receipt_records")
+}
+
+model RunRequestRecord {
+  id            String   @id @default(cuid())
+  correlationId String   @unique
+  source        String
+  userMessage   String
+  orchestrator  String?
+  status        String
+  metadataJson  String   @default("{}")
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([source])
+  @@index([orchestrator])
+  @@index([status])
+  @@index([startedAt])
+  @@index([createdAt])
+  @@map("run_request_records")
 }
 
 model RuntimeExecutionRecord {

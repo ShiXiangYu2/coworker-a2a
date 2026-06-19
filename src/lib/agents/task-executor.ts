@@ -29,6 +29,22 @@ export interface SubTaskResult {
   deliverables: Deliverable[]
   durationMs: number
   error?: string
+  agentTaskRunRecordId?: string
+  blockedToolRequests?: BlockedToolRequest[]
+  requiresApproval?: boolean
+  proposedActionSummary?: string
+  executionIntentRecordId?: string
+  executionPlanRecordId?: string
+}
+
+export interface BlockedToolRequest {
+  toolName: string
+  input: unknown
+  reason: string
+}
+
+export interface AgentTaskExecutionOptions {
+  allowDirectToolExecution?: boolean
 }
 
 const produceAnalysisTool: LLMToolDefinition = {
@@ -134,9 +150,11 @@ function isAgentId(value: string): value is AgentId {
 export async function executeAgentTask(
   agentId: string,
   taskDescription: string,
-  previousResults?: SubTaskResult[]
+  previousResults?: SubTaskResult[],
+  options: AgentTaskExecutionOptions = {}
 ): Promise<SubTaskResult> {
   const startTime = Date.now()
+  const allowDirectToolExecution = options.allowDirectToolExecution ?? true
   if (!isAgentId(agentId)) {
     return {
       agentId,
@@ -238,7 +256,11 @@ export async function executeAgentTask(
     // Memory 查询失败不影响 Agent 执行
   }
 
-  userParts.push('', 'You can use tools to interact with the system (execute commands, write files, read files). After using tools, produce your output using the produce_deliverable tool.')
+  if (allowDirectToolExecution) {
+    userParts.push('', 'You can use tools to interact with the system (execute commands, write files, read files). After using tools, produce your output using the produce_deliverable tool.')
+  } else {
+    userParts.push('', 'Direct tool execution is disabled in this ChatHub agent run. If an external action is needed, describe the requested action as an approval-required proposal instead of calling a tool.')
+  }
 
   const userMessage = userParts.join('\n')
 
@@ -249,7 +271,9 @@ export async function executeAgentTask(
     const messages: { role: 'user' | 'assistant'; content: string }[] = [
       { role: 'user', content: userMessage },
     ]
-    const allTools = [useToolTool, produceDeliverableTool, produceAnalysisTool]
+    const allTools = allowDirectToolExecution
+      ? [useToolTool, produceDeliverableTool, produceAnalysisTool]
+      : [produceDeliverableTool, produceAnalysisTool]
     let toolCallCount = 0
     const maxToolCalls = 3
 
@@ -260,6 +284,16 @@ export async function executeAgentTask(
     })
 
     // 工具调用循环
+    if (!allowDirectToolExecution && result.toolUse?.name === 'use_tool') {
+      return createBlockedToolRequestResult({
+        agentId,
+        agentName: agent.name,
+        taskDescription,
+        toolUseInput: result.toolUse.input as Record<string, unknown>,
+        durationMs: Date.now() - startTime,
+      })
+    }
+
     while (result.toolUse && result.toolUse.name === 'use_tool' && toolCallCount < maxToolCalls) {
       toolCallCount++
       const toolInput = result.toolUse.input as Record<string, unknown>
@@ -434,5 +468,39 @@ export async function executeAgentTask(
       durationMs: Date.now() - startTime,
       error: `LLM call failed: ${error instanceof Error ? error.message : 'unknown'}. Used deterministic fallback.`,
     }
+  }
+}
+
+function createBlockedToolRequestResult(input: {
+  agentId: string
+  agentName: string
+  taskDescription: string
+  toolUseInput: Record<string, unknown>
+  durationMs: number
+}): SubTaskResult {
+  const toolName = String(input.toolUseInput.toolName ?? 'unknown_tool')
+  const toolInput = input.toolUseInput.input ?? null
+  const reason = 'Direct tool execution is disabled for ChatHub agent runs. Route this action through ExecutionRuntime and Kelvin approval.'
+  const proposedActionSummary = `Agent requested ${toolName}; convert to an approval-gated execution plan before running.`
+
+  return {
+    agentId: input.agentId,
+    agentName: input.agentName,
+    title: input.taskDescription.slice(0, 80),
+    status: 'completed',
+    confidence: 0.6,
+    summary: 'Agent requested a tool action that was withheld for Kelvin approval.',
+    findings: [proposedActionSummary],
+    deliverables: [],
+    durationMs: input.durationMs,
+    blockedToolRequests: [
+      {
+        toolName,
+        input: toolInput,
+        reason,
+      },
+    ],
+    requiresApproval: true,
+    proposedActionSummary,
   }
 }

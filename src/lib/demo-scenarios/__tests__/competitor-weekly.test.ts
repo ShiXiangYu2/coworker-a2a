@@ -17,6 +17,26 @@ vi.mock('@/lib/prisma', () => {
 
   return {
     prisma: {
+      runRequestRecord: {
+        create: vi.fn(async ({ data }) => ({
+          id: 'run-request-1',
+          ...data,
+          createdAt: new Date('2026-06-18T00:00:00.000Z'),
+          updatedAt: new Date('2026-06-18T00:00:00.000Z'),
+        })),
+        update: vi.fn(async ({ where, data }) => ({
+          id: 'run-request-1',
+          correlationId: where.correlationId,
+          source: 'demo.competitor_weekly',
+          userMessage: 'mock user message',
+          orchestrator: 'elon',
+          metadataJson: '{}',
+          startedAt: new Date('2026-06-18T00:00:00.000Z'),
+          createdAt: new Date('2026-06-18T00:00:00.000Z'),
+          updatedAt: new Date('2026-06-18T00:00:00.000Z'),
+          ...data,
+        })),
+      },
       harmonyAuditEvent: {
         create: vi.fn(async ({ data }) => {
           const event = {
@@ -111,24 +131,25 @@ vi.mock('@/lib/execution-gateway', () => {
   }
 })
 
-vi.mock('@/lib/tool-registry', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/tool-registry')>('@/lib/tool-registry')
-  return {
-    ...actual,
-    executeRegisteredTool: vi.fn(async ({ toolId, plan, context }) => ({
-      id: 'tool-receipt-1',
-      toolId,
-      action: plan.action,
-      status: 'succeeded',
-      path: plan.targetPath,
-      timestamp: '2026-06-18T00:00:00.000Z',
-      executionPlanId: plan.id,
-      approvedBy: context.approvedBy,
-      approvalRecordId: context.approvalRecordId,
-      reason: 'Kelvin-approved tool execution succeeded.',
-    })),
-  }
-})
+vi.mock('@/lib/tool-registry', () => ({
+  obsidianWriteDraftTool: {
+    id: 'obsidian.write_draft',
+    action: 'write_local_markdown_draft',
+    riskLevel: 'medium',
+  },
+  executeRegisteredTool: vi.fn(async ({ toolId, plan, context }) => ({
+    id: 'tool-receipt-1',
+    toolId,
+    action: plan.action,
+    status: 'succeeded',
+    path: plan.targetPath,
+    timestamp: '2026-06-18T00:00:00.000Z',
+    executionPlanId: plan.id,
+    approvedBy: context.approvedBy,
+    approvalRecordId: context.approvalRecordId,
+    reason: 'Kelvin-approved tool execution succeeded.',
+  })),
+}))
 
 describe('competitor weekly demo scenario', () => {
   beforeEach(() => {
@@ -144,6 +165,7 @@ describe('competitor weekly demo scenario', () => {
 
     expect(result.markdownPath).toBeUndefined()
     expect(result.correlationId).toMatch(/^demo-competitor-weekly-/)
+    expect(result.runRequestRecordId).toBe('run-request-1')
     expect(result.receipt.status).toBe('dry_run')
     expect(result.runtimeRecordId).toBe('runtime-record-1')
     expect(result.receipt.toolId).toBe('obsidian.write_draft')
@@ -182,6 +204,7 @@ describe('competitor weekly demo scenario', () => {
     })
 
     expect(result.receipt.status).toBe('succeeded')
+    expect(result.runRequestRecordId).toBe('run-request-1')
     expect(result.runtimeRecordId).toBe('runtime-record-1')
     expect(result.receipt.toolId).toBe('obsidian.write_draft')
     expect(result.receipt.path).toContain('Inbox')

@@ -2,18 +2,23 @@
  * Chat API 多 Agent 协作流程测试
  */
 
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach } from 'vitest'
 import { prisma } from '@/lib/prisma'
 import { POST } from '../route'
 
-afterEach(async () => {
+const testPrefix = `multi-agent-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+async function cleanupTestConversations() {
   await prisma.message.deleteMany({
-    where: { conversation: { title: { startsWith: 'multi-agent-test' } } },
+    where: { conversation: { title: { startsWith: testPrefix } } },
   })
   await prisma.conversation.deleteMany({
-    where: { title: { startsWith: 'multi-agent-test' } },
+    where: { title: { startsWith: testPrefix } },
   })
-})
+}
+
+beforeEach(cleanupTestConversations)
+afterEach(cleanupTestConversations)
 
 describe('Chat API - Multi-Agent Flow', () => {
   it('should return SSE response with route event', async () => {
@@ -21,7 +26,7 @@ describe('Chat API - Multi-Agent Flow', () => {
       new Request('http://localhost/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: 'multi-agent-test hello' }),
+        body: JSON.stringify({ message: `${testPrefix} hello` }),
       }) as never
     )
 
@@ -54,7 +59,7 @@ describe('Chat API - Multi-Agent Flow', () => {
       new Request('http://localhost/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: 'multi-agent-test store messages' }),
+        body: JSON.stringify({ message: `${testPrefix} store messages` }),
       }) as never
     )
 
