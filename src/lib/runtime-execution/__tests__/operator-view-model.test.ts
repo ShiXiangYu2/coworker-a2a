@@ -23,6 +23,7 @@ vi.mock('../task-summary', () => ({
       derived: {
         hasAnyLiveJob: false,
         hasAnySucceededJob: false,
+        hasAnyAwaitingRuntimeExecution: false,
         latestJobId: null,
       },
       safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
@@ -43,6 +44,8 @@ vi.mock('../task-summary', () => ({
             recoveryCount: 0,
             isTerminal: false,
             leaseActive: false,
+            issuedRuntimeTokenActive: true,
+            awaitingRuntimeExecution: true,
           },
           safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
         },
@@ -59,6 +62,8 @@ vi.mock('../task-summary', () => ({
             recoveryCount: 1,
             isTerminal: true,
             leaseActive: false,
+            issuedRuntimeTokenActive: false,
+            awaitingRuntimeExecution: false,
           },
           safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
         },
@@ -75,6 +80,8 @@ vi.mock('../task-summary', () => ({
             recoveryCount: 1,
             isTerminal: true,
             leaseActive: false,
+            issuedRuntimeTokenActive: true,
+            awaitingRuntimeExecution: false,
           },
           safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
         },
@@ -96,6 +103,7 @@ vi.mock('../task-summary', () => ({
       derived: {
         hasAnyLiveJob: true,
         hasAnySucceededJob: true,
+        hasAnyAwaitingRuntimeExecution: true,
         latestJobId: 'job-succeeded',
       },
       safetyNote: 'Sprint 22 runtime execution is limited to queued records only.',
@@ -133,6 +141,7 @@ describe('Sprint 22 runtime operator view-model adapter', () => {
     expect(result.statusBands.failed).toHaveLength(1)
     expect(result.highlight).toEqual({
       primaryStatus: 'failed',
+      primaryHint: 'issued_runtime_token_active_waiting_execution',
       latestJobId: 'job-succeeded',
       latestReceiptStatus: 'dry_run',
       hasActionableLiveJob: true,
@@ -157,6 +166,7 @@ describe('Sprint 22 runtime operator view-model adapter', () => {
     })
     expect(result.highlight).toEqual({
       primaryStatus: 'empty',
+      primaryHint: null,
       latestJobId: null,
       latestReceiptStatus: null,
       hasActionableLiveJob: false,
