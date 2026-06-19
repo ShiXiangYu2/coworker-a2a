@@ -108,6 +108,8 @@ vi.mock('@/lib/runtime-execution', async () => {
           recoveryCount: 1,
           isTerminal: true,
           leaseActive: false,
+          issuedRuntimeTokenActive: false,
+          awaitingRuntimeExecution: false,
         },
         safetyNote,
       }
@@ -133,6 +135,7 @@ vi.mock('@/lib/runtime-execution', async () => {
         derived: {
           hasAnyLiveJob: false,
           hasAnySucceededJob: false,
+          hasAnyAwaitingRuntimeExecution: false,
           latestJobId: null,
         },
         safetyNote,
@@ -153,6 +156,8 @@ vi.mock('@/lib/runtime-execution', async () => {
               recoveryCount: 0,
               isTerminal: false,
               leaseActive: false,
+              issuedRuntimeTokenActive: true,
+              awaitingRuntimeExecution: true,
             },
             safetyNote,
           },
@@ -174,6 +179,7 @@ vi.mock('@/lib/runtime-execution', async () => {
         derived: {
           hasAnyLiveJob: true,
           hasAnySucceededJob: false,
+          hasAnyAwaitingRuntimeExecution: true,
           latestJobId: 'job-1',
         },
         safetyNote,
@@ -200,6 +206,7 @@ vi.mock('@/lib/runtime-execution', async () => {
         derived: {
           hasAnyLiveJob: false,
           hasAnySucceededJob: false,
+          hasAnyAwaitingRuntimeExecution: false,
           latestJobId: null,
         },
         safetyNote,
@@ -215,6 +222,7 @@ vi.mock('@/lib/runtime-execution', async () => {
       },
       highlight: {
         primaryStatus: 'empty',
+        primaryHint: null,
         latestJobId: null,
         latestReceiptStatus: null,
         hasActionableLiveJob: false,
@@ -553,6 +561,7 @@ describe('Sprint 22 Runtime API', () => {
     expect(body.data.derived).toEqual({
       hasAnyLiveJob: true,
       hasAnySucceededJob: false,
+      hasAnyAwaitingRuntimeExecution: true,
       latestJobId: 'job-1',
     })
     expect(body.safetyNote).toContain('Sprint 22')
@@ -646,6 +655,8 @@ describe('Sprint 22 Runtime API', () => {
       recoveryCount: 1,
       isTerminal: true,
       leaseActive: false,
+      issuedRuntimeTokenActive: false,
+      awaitingRuntimeExecution: false,
     })
     expect(body.safetyNote).toContain('Sprint 22')
     expect(getRuntimeDispatchJobTimeline).toHaveBeenCalledWith('job-1')
