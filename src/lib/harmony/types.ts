@@ -98,8 +98,15 @@ export type HarmonyAuditEventType =
   | 'agent.run_blocked'
   | 'agent.run_failed'
   | 'agent.run_cancelled'
+  | 'agent_task.started'
+  | 'agent_task.completed'
+  | 'agent_task.failed'
+  | 'chathub.request_received'
+  | 'chathub.route_decided'
+  | 'chathub.response_completed'
+  | 'chathub.response_failed'
 
-export type HarmonyActorType = 'user' | 'system' | 'router' | 'agent_placeholder'
+export type HarmonyActorType = 'user' | 'system' | 'router' | 'agent_placeholder' | 'chathub' | 'agent'
 
 export type ConfirmationStatus = 'pending' | 'approved' | 'rejected' | 'expired'
 

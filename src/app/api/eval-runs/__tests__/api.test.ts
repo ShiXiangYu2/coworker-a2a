@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '@/lib/prisma'
 import type { RouteDecision } from '@/lib/agents/types'
 import { createTaskFromRoute } from '@/lib/harmony/repository'
@@ -35,7 +35,7 @@ function decision(): RouteDecision {
   }
 }
 
-afterEach(async () => {
+async function cleanupEvalApiTestData() {
   await prisma.$executeRawUnsafe('DELETE FROM eval_findings')
   await prisma.$executeRawUnsafe('DELETE FROM eval_checks')
   await prisma.$executeRawUnsafe('DELETE FROM eval_runs')
@@ -50,7 +50,10 @@ afterEach(async () => {
   await prisma.harmonyTaskStep.deleteMany()
   await prisma.harmonyTaskRun.deleteMany()
   await prisma.harmonyTask.deleteMany()
-})
+}
+
+beforeEach(cleanupEvalApiTestData)
+afterEach(cleanupEvalApiTestData)
 
 describe('Sprint 7 Eval API', () => {
   it('creates EvalTarget and EvalRun without mutating Task status or creating ToolCall', async () => {

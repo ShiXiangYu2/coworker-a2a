@@ -1,6 +1,7 @@
 import {
   numberValue,
   readJson,
+  requireRuntimeWorkerAuth,
   requiredString,
   runRuntimeDispatchJobOnce,
   runtimeExecutionErrorResponse,
@@ -14,10 +15,12 @@ export async function POST(
   try {
     const { id } = await params
     const body = await readJson(request)
+    const workerId = requiredString(body.workerId, 'workerId')
+    requireRuntimeWorkerAuth(request, workerId)
     const mode = requiredString(body.mode, 'mode')
     const result = await runRuntimeDispatchJobOnce({
       jobId: id,
-      workerId: requiredString(body.workerId, 'workerId'),
+      workerId,
       mode: mode as 'dry_run' | 'obsidian_write',
       execute: body.execute === true,
       vaultPath: stringValue(body.vaultPath),

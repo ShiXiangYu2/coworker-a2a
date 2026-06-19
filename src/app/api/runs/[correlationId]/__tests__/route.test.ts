@@ -5,6 +5,10 @@ import { getRunByCorrelationId } from '@/lib/runs/repository'
 vi.mock('@/lib/runs/repository', () => ({
   getRunByCorrelationId: vi.fn(async () => ({
     correlationId: 'corr-1',
+    runRequestRecordId: 'run-request-1',
+    source: 'demo.competitor_weekly',
+    userMessage: '帮我把今天的竞品资料整理成周报草稿',
+    requestStatus: 'withheld',
     orchestrator: 'elon',
     status: 'withheld',
     startedAt: '2026-06-19T00:00:00.000Z',
@@ -40,6 +44,14 @@ vi.mock('@/lib/runs/repository', () => ({
         createdAt: '2026-06-19T00:00:00.000Z',
       },
     ],
+    failureSummary: {
+      hasFailure: true,
+      failedAgentTaskRunIds: [],
+      failedRuntimeExecutionIds: [],
+      withheldRuntimeExecutionIds: ['runtime-1'],
+      deniedRuntimeExecutionIds: [],
+      latestFailureReason: 'Request withheld pending review.',
+    },
   })),
 }))
 
@@ -54,12 +66,18 @@ describe('/api/runs/[correlationId]', () => {
     expect(body.ok).toBe(true)
     expect(body.data).toMatchObject({
       correlationId: 'corr-1',
+      requestStatus: 'withheld',
       status: 'withheld',
       latestReceiptStatus: 'dry_run',
     })
     expect(body.data.agentTaskRuns).toHaveLength(1)
     expect(body.data.runtimeExecutions).toHaveLength(1)
     expect(body.data.timelineEvents).toHaveLength(1)
+    expect(body.data.failureSummary).toMatchObject({
+      hasFailure: true,
+      withheldRuntimeExecutionIds: ['runtime-1'],
+      latestFailureReason: 'Request withheld pending review.',
+    })
     expect(getRunByCorrelationId).toHaveBeenCalledWith({ correlationId: 'corr-1' })
   })
 })

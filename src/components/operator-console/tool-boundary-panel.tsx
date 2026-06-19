@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { EmptyState, LoadingState, PanelShell, RecordMeta, SafetyNote, StatusBadge } from './ui'
 
 interface ToolBoundaryRecord {
   id: string
@@ -37,53 +38,45 @@ export function ToolBoundaryPanel() {
   }, [])
 
   if (loading) {
-    return (
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <div className="text-sm text-gray-500">Loading local tool boundary records...</div>
-      </div>
-    )
+    return <LoadingState label="正在读取工具边界记录..." />
   }
 
   return (
-    <div className="rounded-lg border bg-white shadow-sm">
-      <div className="border-b px-4 py-3">
-        <h2 className="text-lg font-semibold text-gray-900">Tool Boundary Evidence</h2>
-        <p className="text-xs text-gray-500">
-          Read-only view of local tool records. This console does not request permission, approve tool activity, or trigger tool runtime.
-        </p>
-      </div>
-
-      <div className="max-h-64 overflow-y-auto">
+    <PanelShell
+      title="Tool Boundary Evidence"
+      description="只读展示本地工具治理记录。这里不会请求权限、批准工具活动或触发任何工具运行时。"
+    >
+      <div className="max-h-72 overflow-y-auto">
         {records.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-500">
-            No local tool boundary records yet.
-            <br />
-            <span className="text-xs text-gray-400">
-              This panel presents status and evidence only.
-            </span>
-          </div>
+          <EmptyState
+            title="暂无工具边界记录"
+            description="产生 ToolCall 或工具治理证据后，这里会展示状态、风险等级和本地记录时间。"
+          />
         ) : (
-          <div className="divide-y">
+          <div className="divide-y divide-gray-100">
             {records.map((item) => (
               <div key={item.id} className="px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">
+                  <div className="min-w-0">
+                    <div className="break-words text-sm font-medium text-gray-900">
                       {item.toolName ?? item.toolId ?? item.id}
                     </div>
-                    <div className="mt-1 text-xs text-gray-500">
-                      {item.riskLevel ?? 'local_record'} | {new Date(item.createdAt).toLocaleString()}
-                    </div>
+                    <RecordMeta>
+                      风险等级：{item.riskLevel ?? 'local_record'} / {new Date(item.createdAt).toLocaleString()}
+                    </RecordMeta>
                   </div>
-                  <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-amber-100">
-                    {item.status}
-                  </span>
+                  <StatusBadge status={item.status} />
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-    </div>
+      <div className="border-t border-gray-200 p-4">
+        <SafetyNote>
+          工具边界面板只展示 recommendation-only / evidence-only 记录，不代表 ToolRun、外部 API、文件写入或 Git 操作已经获批。
+        </SafetyNote>
+      </div>
+    </PanelShell>
   )
 }

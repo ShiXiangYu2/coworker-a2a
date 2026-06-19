@@ -17,6 +17,10 @@ import { obsidianWriteDraftTool, type ToolExecutionReceipt } from '@/lib/tool-re
 import { runExecutionRuntime } from '@/lib/execution-runtime'
 import { runElonOrchestrator } from '@/lib/orchestrator'
 import { runRecordedAgentTask, type DemoEvidence } from '@/lib/agent-task-runner'
+import {
+  createRunRequestRecord,
+  updateRunRequestRecordStatus,
+} from '@/lib/run-requests/repository'
 
 export interface CompetitorWeeklyDemoInput {
   conversationId?: string
@@ -44,6 +48,7 @@ interface DemoTaskBundle {
 
 export interface CompetitorWeeklyDemoResult {
   correlationId: string
+  runRequestRecordId: string
   taskBundle: DemoTaskBundle
   executionPlan: ObsidianDraftPlan
   executionGateway: {
@@ -84,6 +89,23 @@ export async function runCompetitorWeeklyDemo(input: CompetitorWeeklyDemoInput):
   if (!researchTask || !contentTask) {
     throw new Error('Competitor weekly orchestration must include research and content tasks.')
   }
+
+  const runRequest = await createRunRequestRecord({
+    correlationId,
+    source: 'demo.competitor_weekly',
+    userMessage: input.userMessage,
+    orchestrator: orchestration.orchestrator,
+    metadata: {
+      conversationId: input.conversationId,
+      evidenceIds: input.evidenceIds ?? [],
+      approved: Boolean(input.approved),
+    },
+  })
+  await updateRunRequestRecordStatus({
+    correlationId,
+    status: 'running',
+    reason: 'Competitor weekly demo started orchestrated agent work.',
+  })
 
   const filename = buildDraftFilename()
   const draftTitle = 'Competitor weekly draft'
@@ -403,11 +425,26 @@ export async function runCompetitorWeeklyDemo(input: CompetitorWeeklyDemoInput):
     },
   })
 
+  const requestStatus = receipt.status === 'succeeded' ? 'succeeded' : 'withheld'
+  await updateRunRequestRecordStatus({
+    correlationId,
+    status: requestStatus,
+    reason: requestStatus === 'succeeded'
+      ? 'Competitor weekly demo completed with a Kelvin-approved vault draft.'
+      : 'Competitor weekly demo completed as withheld pending Kelvin approval.',
+    metadata: {
+      conversationId: input.conversationId,
+      evidenceIds: input.evidenceIds ?? [],
+      approved: Boolean(input.approved),
+      receiptStatus: receipt.status,
+      runtimeRecordId: runtimeResult.runtimeRecordId,
+    },
+  })
+
   const timelineRecords = await getExecutionIntentTimeline(intent.record.id)
   const extraEvents = await prisma.harmonyAuditEvent.findMany({
     where: {
       correlationId,
-      eventType: { startsWith: 'demo_scenario.' },
     },
     orderBy: { createdAt: 'asc' },
   })
@@ -423,6 +460,7 @@ export async function runCompetitorWeeklyDemo(input: CompetitorWeeklyDemoInput):
 
   return {
     correlationId,
+    runRequestRecordId: runRequest.record.id,
     taskBundle: {
       chatHubRequest: {
         conversationId: input.conversationId,

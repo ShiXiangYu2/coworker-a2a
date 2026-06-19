@@ -2911,6 +2911,27 @@ model ExecutionReceiptRecord {
   @@map("execution_receipt_records")
 }
 
+model RunRequestRecord {
+  id            String   @id @default(cuid())
+  correlationId String   @unique
+  source        String
+  userMessage   String
+  orchestrator  String?
+  status        String
+  metadataJson  String   @default("{}")
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([source])
+  @@index([orchestrator])
+  @@index([status])
+  @@index([startedAt])
+  @@index([createdAt])
+  @@map("run_request_records")
+}
+
 model RuntimeExecutionRecord {
   id                String   @id @default(cuid())
   correlationId     String?

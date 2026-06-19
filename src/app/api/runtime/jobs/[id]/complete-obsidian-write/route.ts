@@ -2,6 +2,7 @@ import {
   completeRuntimeDispatchJobObsidianWrite,
   isObject,
   readJson,
+  requireRuntimeWorkerAuth,
   requiredString,
   runtimeExecutionErrorResponse,
   stringValue,
@@ -14,9 +15,11 @@ export async function POST(
   try {
     const { id } = await params
     const body = await readJson(request)
+    const workerId = requiredString(body.workerId, 'workerId')
+    requireRuntimeWorkerAuth(request, workerId)
     const result = await completeRuntimeDispatchJobObsidianWrite({
       id,
-      workerId: requiredString(body.workerId, 'workerId'),
+      workerId,
       execute: body.execute === true,
       vaultPath: stringValue(body.vaultPath),
       snapshot: isObject(body.snapshot) ? body.snapshot : undefined,

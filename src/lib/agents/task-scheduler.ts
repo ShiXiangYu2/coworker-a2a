@@ -7,6 +7,7 @@
 
 import type { SubTask } from './llm-router'
 import { executeAgentTask, type SubTaskResult } from './task-executor'
+import { executeRecordedAgentTask } from './recorded-task-executor'
 
 /** 调度结果 */
 export interface ScheduleResult {
@@ -18,6 +19,12 @@ export interface ScheduleResult {
   allSucceeded: boolean
 }
 
+export interface ScheduleSubTasksContext {
+  message: string
+  correlationId?: string
+  orchestrator?: string
+}
+
 /**
  * 调度子任务执行
  *
@@ -27,10 +34,8 @@ export interface ScheduleResult {
  */
 export async function scheduleSubTasks(
   subtasks: SubTask[],
-  _context: { message: string }
+  context: ScheduleSubTasksContext
 ): Promise<ScheduleResult> {
-  void _context
-
   const startTime = Date.now()
   const results: SubTaskResult[] = new Array(subtasks.length)
   const completed = new Set<number>()
@@ -55,7 +60,7 @@ export async function scheduleSubTasks(
 
     // 并行执行所有就绪的子任务
     const promises = ready.map(({ st, idx }) =>
-      executeWithPreviousResults(st, idx, limited, results)
+      executeWithPreviousResults(st, idx, limited, results, context)
         .then((result) => {
           results[idx] = result
           completed.add(idx)
@@ -113,16 +118,34 @@ async function executeWithPreviousResults(
   subtask: SubTask,
   index: number,
   allSubtasks: SubTask[],
-  completedResults: SubTaskResult[]
+  completedResults: SubTaskResult[],
+  context: ScheduleSubTasksContext
 ): Promise<SubTaskResult> {
   // 收集前置任务的结果
   const previousResults = subtask.dependsOn
     .filter((dep) => completedResults[dep])
     .map((dep) => completedResults[dep])
 
-  return executeAgentTask(
-    subtask.agentId,
-    `${subtask.title}\n\n${subtask.description}`,
-    previousResults.length > 0 ? previousResults : undefined
-  )
+  const taskDescription = `${subtask.title}\n\n${subtask.description}`
+  const previous = previousResults.length > 0 ? previousResults : undefined
+
+  if (context.correlationId) {
+    return executeRecordedAgentTask({
+      correlationId: context.correlationId,
+      orchestrator: context.orchestrator ?? 'route_engine',
+      agentId: subtask.agentId,
+      taskId: `chathub-subtask-${index + 1}`,
+      taskType: 'chat_subtask',
+      taskDescription,
+      previousResults: previous,
+      input: {
+        message: context.message,
+        subtask,
+        index,
+        allSubtasks,
+      },
+    })
+  }
+
+  return executeAgentTask(subtask.agentId, taskDescription, previous)
 }

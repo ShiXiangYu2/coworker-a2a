@@ -29,6 +29,7 @@ export interface SubTaskResult {
   deliverables: Deliverable[]
   durationMs: number
   error?: string
+  agentTaskRunRecordId?: string
 }
 
 const produceAnalysisTool: LLMToolDefinition = {

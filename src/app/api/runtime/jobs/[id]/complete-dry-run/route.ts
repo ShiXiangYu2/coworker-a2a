@@ -2,6 +2,7 @@ import {
   completeRuntimeDispatchJobDryRun,
   isObject,
   readJson,
+  requireRuntimeWorkerAuth,
   requiredString,
   runtimeExecutionErrorResponse,
   stringValue,
@@ -14,9 +15,11 @@ export async function POST(
   try {
     const { id } = await params
     const body = await readJson(request)
+    const workerId = requiredString(body.workerId, 'workerId')
+    requireRuntimeWorkerAuth(request, workerId)
     const result = await completeRuntimeDispatchJobDryRun({
       id,
-      workerId: requiredString(body.workerId, 'workerId'),
+      workerId,
       targetRef: stringValue(body.targetRef),
       summary: stringValue(body.summary),
       result: isObject(body.result) ? body.result : undefined,

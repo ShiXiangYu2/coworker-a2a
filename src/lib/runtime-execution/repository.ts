@@ -62,6 +62,109 @@ function ensureObsidianRuntimeAction(current: {
   }
 }
 
+function assertRuntimeExecutionTokenExecutable(args: {
+  tokenRecord: {
+    status: string
+    expiresAt: Date
+    connectorId: string
+    actionType: string
+    taskId: string
+    idempotencyKey: string | null
+    scopeJson: string
+  }
+  jobRecord: {
+    connectorId: string
+    actionType: string
+    taskId: string
+    idempotencyKey: string | null
+  }
+  now: Date
+}) {
+  const { tokenRecord, jobRecord, now } = args
+  if (tokenRecord.status !== 'active') {
+    throw new RuntimeExecutionApiError(`Runtime execution token must be active, got "${tokenRecord.status}".`, 409)
+  }
+  if (tokenRecord.expiresAt.getTime() <= now.getTime()) {
+    throw new RuntimeExecutionApiError('Runtime execution token has expired.', 409)
+  }
+  if (tokenRecord.connectorId !== jobRecord.connectorId) {
+    throw new RuntimeExecutionApiError('Runtime execution token connectorId does not match the runtime dispatch job.', 409)
+  }
+  if (tokenRecord.actionType !== jobRecord.actionType) {
+    throw new RuntimeExecutionApiError('Runtime execution token actionType does not match the runtime dispatch job.', 409)
+  }
+  if (tokenRecord.taskId !== jobRecord.taskId) {
+    throw new RuntimeExecutionApiError('Runtime execution token taskId does not match the runtime dispatch job.', 409)
+  }
+  if (!tokenRecord.idempotencyKey || !jobRecord.idempotencyKey || tokenRecord.idempotencyKey !== jobRecord.idempotencyKey) {
+    throw new RuntimeExecutionApiError('Runtime execution token idempotencyKey does not match the runtime dispatch job.', 409)
+  }
+
+  const scope = parseJson(tokenRecord.scopeJson, {}) as {
+    connectorId?: string
+    actionType?: string
+    taskId?: string
+    idempotencyKey?: string
+    allowedTargetDirectoryLabel?: string
+  }
+  if (scope.connectorId !== tokenRecord.connectorId || scope.connectorId !== jobRecord.connectorId) {
+    throw new RuntimeExecutionApiError('Runtime execution token scope connectorId does not match the approved job.', 409)
+  }
+  if (scope.actionType !== tokenRecord.actionType || scope.actionType !== jobRecord.actionType) {
+    throw new RuntimeExecutionApiError('Runtime execution token scope actionType does not match the approved job.', 409)
+  }
+  if (scope.taskId !== tokenRecord.taskId || scope.taskId !== jobRecord.taskId) {
+    throw new RuntimeExecutionApiError('Runtime execution token scope taskId does not match the approved job.', 409)
+  }
+  if (scope.idempotencyKey !== tokenRecord.idempotencyKey || scope.idempotencyKey !== jobRecord.idempotencyKey) {
+    throw new RuntimeExecutionApiError('Runtime execution token scope idempotencyKey does not match the approved job.', 409)
+  }
+  if (scope.allowedTargetDirectoryLabel !== 'Inbox/AI Drafts') {
+    throw new RuntimeExecutionApiError('Runtime execution token scope must be limited to Inbox/AI Drafts.', 409)
+  }
+}
+
+async function assertRuntimeDispatchJobNotAlreadyCompleted(args: {
+  jobRecord: {
+    id: string
+    status: string
+    idempotencyKey: string | null
+  }
+}) {
+  const { jobRecord } = args
+  if (jobRecord.status === 'succeeded') {
+    throw new RuntimeExecutionApiError('Runtime dispatch job has already succeeded.', 409)
+  }
+  const existingReceipt = await prisma.runtimeExecutionReceipt.findUnique({ where: { jobId: jobRecord.id } })
+  if (existingReceipt) {
+    throw new RuntimeExecutionApiError('Runtime execution receipt already exists for this dispatch job.', 409)
+  }
+  if (!jobRecord.idempotencyKey) {
+    throw new RuntimeExecutionApiError('Runtime dispatch job idempotencyKey is required before completion.', 409)
+  }
+  const existingSucceededJob = await prisma.runtimeDispatchJob.findFirst({
+    where: {
+      idempotencyKey: jobRecord.idempotencyKey,
+      status: 'succeeded',
+    },
+  })
+  if (existingSucceededJob && existingSucceededJob.id !== jobRecord.id) {
+    throw new RuntimeExecutionApiError('Runtime dispatch job idempotencyKey already has a succeeded job.', 409)
+  }
+}
+
+async function assertRuntimeDispatchJobIdempotencyAvailable(idempotencyKey: string) {
+  const existingLiveJob = await prisma.runtimeDispatchJob.findFirst({
+    where: {
+      idempotencyKey,
+      status: { in: ['queued', 'leased', 'running', 'succeeded'] },
+    },
+  })
+  if (existingLiveJob) {
+    throw new RuntimeExecutionApiError('Runtime dispatch job idempotencyKey already has a live or succeeded job.', 409)
+  }
+}
+
 export function correlationIdFrom(value: unknown, prefix = 'runtime-execution'): string {
   return typeof value === 'string' && value.trim()
     ? value
@@ -122,9 +225,11 @@ export async function createRuntimeExecutionToken(input: CreateRuntimeExecutionT
 export async function createRuntimeDispatchJob(input: CreateRuntimeDispatchJobInput) {
   validateCreateRuntimeDispatchJobInput(input)
   const correlationId = correlationIdFrom(input.correlationId)
+  const idempotencyKey = input.idempotencyKey ?? input.plan.idempotencyKey
+  await assertRuntimeDispatchJobIdempotencyAvailable(idempotencyKey)
   const record = await prisma.runtimeDispatchJob.create({
     data: {
-      idempotencyKey: input.idempotencyKey ?? input.plan.idempotencyKey,
+      idempotencyKey,
       targetSprint: 'sprint_22',
       baseline: 'sprint_1_21_complete',
       runtimeTokenId: input.runtimeTokenId,
@@ -651,6 +756,14 @@ export async function completeRuntimeDispatchJobDryRun(args: {
   }
 
   const now = args.now ?? new Date()
+  const tokenRecord = await prisma.runtimeExecutionToken.findUnique({ where: { id: current.runtimeTokenId } })
+  if (!tokenRecord) throw new RuntimeExecutionApiError('Runtime execution token not found.', 404)
+  assertRuntimeExecutionTokenExecutable({
+    tokenRecord,
+    jobRecord: current,
+    now,
+  })
+  await assertRuntimeDispatchJobNotAlreadyCompleted({ jobRecord: current })
   const record = await prisma.runtimeDispatchJob.update({
     where: { id: args.id },
     data: {
@@ -728,8 +841,15 @@ export async function completeRuntimeDispatchJobObsidianWrite(args: {
     throw new RuntimeExecutionApiError('Runtime dispatch job cannot transition to succeeded.', 409)
   }
 
+  const now = args.now ?? new Date()
   const tokenRecord = await prisma.runtimeExecutionToken.findUnique({ where: { id: current.runtimeTokenId } })
   if (!tokenRecord) throw new RuntimeExecutionApiError('Runtime execution token not found.', 404)
+  assertRuntimeExecutionTokenExecutable({
+    tokenRecord,
+    jobRecord: current,
+    now,
+  })
+  await assertRuntimeDispatchJobNotAlreadyCompleted({ jobRecord: current })
   ensureObsidianRuntimeAction(tokenRecord)
 
   const scope = parseJson(tokenRecord.scopeJson, {}) as {
@@ -757,7 +877,6 @@ export async function completeRuntimeDispatchJobObsidianWrite(args: {
     throw new RuntimeExecutionApiError('Runtime dispatch job filename does not match the approved runtime token scope.', 409)
   }
 
-  const now = args.now ?? new Date()
   const plan = createObsidianDraftPlan({
     draftTitle: payload.draftTitle,
     filename: payload.filename,

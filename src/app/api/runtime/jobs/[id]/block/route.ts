@@ -1,6 +1,7 @@
 import {
   isObject,
   readJson,
+  requireRuntimeWorkerAuth,
   requiredString,
   runtimeExecutionErrorResponse,
   blockRuntimeDispatchJob,
@@ -13,10 +14,12 @@ export async function POST(
   try {
     const { id } = await params
     const body = await readJson(request)
+    const workerId = requiredString(body.workerId, 'workerId')
+    requireRuntimeWorkerAuth(request, workerId)
     const snapshot = isObject(body.snapshot) ? body.snapshot : undefined
     const result = await blockRuntimeDispatchJob({
       id,
-      workerId: requiredString(body.workerId, 'workerId'),
+      workerId,
       reason: requiredString(body.reason, 'reason'),
       snapshot,
     })
