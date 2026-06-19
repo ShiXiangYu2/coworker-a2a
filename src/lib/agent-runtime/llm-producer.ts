@@ -12,33 +12,89 @@ import type { AgentId } from '@/lib/agents/types'
 import { getAgentById } from '@/lib/agents/registry'
 import { buildAgentSystemPrompt } from '@/lib/agents/prompts/skills'
 import type { HarmonyTask } from '@/lib/harmony/types'
-import type { AgentResult } from './types'
+import type { AgentResult, AgentRuntimeMode } from './types'
+import { agentRuntimeConfig } from './types'
 import { produceDeterministicAgentResult } from './producer'
 import { resolveAgentContext } from './context-resolver'
 
 /**
- * 为指定 Agent 构建 System Prompt（使用 Skill Prompt + 强制工具调用指令）
+ * 为指定 Agent 构建 System Prompt（使用 Skill Prompt + 工具调用指令）
  *
- * 保留完整的 Skill 行为规范（工程核心亮点），在末尾添加明确的工具调用指令。
+ * 根据运行时模式生成不同的指令：
+ * - analysis_only：强制调用 produce_analysis 工具
+ * - sandbox_execution：可以使用沙箱工具执行命令，最终调用 produce_analysis
  */
-function getAgentSystemPrompt(agentId: Exclude<AgentId, 'kelvin'>): string {
+function getAgentSystemPrompt(
+  agentId: Exclude<AgentId, 'kelvin'>,
+  mode: AgentRuntimeMode = 'analysis_only',
+): string {
   const agent = getAgentById(agentId)
-  if (!agent) {
-    return `You are ${agentId}, a specialist agent of CoWorker. Analyze the task and produce structured output using the produce_analysis tool.`
-  }
+  const basePrompt = agent
+    ? buildAgentSystemPrompt(
+        agentId,
+        agent.name,
+        agent.title,
+        agent.description,
+        agent.responsibilities,
+        agent.skillPromptNames,
+      )
+    : `You are ${agentId}, a specialist agent of CoWorker. Analyze the task and produce structured output.`
 
-  return buildAgentSystemPrompt(
-    agentId,
-    agent.name,
-    agent.title,
-    agent.description,
-    agent.responsibilities,
-    agent.skillPromptNames
-  ) + `
+  if (mode === 'sandbox_execution') {
+    return basePrompt + `
 
 ---
 
-## 执行模式说明
+## 执行模式说明（sandbox_execution）
+
+你正在 Harmony Agent Runtime 中以 **sandbox_execution** 模式运行。
+
+你可以使用沙箱工具执行白名单命令，然后产出结构化分析。
+
+### 可用工具
+
+你可以调用以下工具：
+- **execute_sandbox_command**: 在沙箱内执行白名单命令（test, lint, typecheck, git-read 等）
+- **run_tests**: 运行项目测试（npm test）
+- **run_typecheck**: 运行 TypeScript 类型检查
+- **run_lint**: 运行代码检查
+- **git_status / git_diff / git_log**: Git 只读操作
+- **list_directory / read_file / search_content**: 文件系统只读操作
+
+### 禁止操作
+
+以下操作被严格禁止：
+- git push / commit / merge / checkout
+- 文件写入（除 deliverables/）
+- 外部 API 调用
+- 部署、发布、删除
+
+### 工作流程
+
+1. **分析任务**：理解需要做什么
+2. **使用工具**（可选）：运行测试、检查代码、查看状态等
+3. **产出结果**：**必须调用 produce_analysis 工具**输出结构化分析
+
+### 最终输出
+
+你的最终输出必须是一个 produce_analysis 工具调用，包含：
+- status: "completed" | "blocked" | "needs_human_confirmation" | "failed"
+- confidence: 0.0-1.0
+- summary: 一句话总结
+- findings: 关键发现数组（包括工具执行结果）
+- proposedChanges: 建议变更数组
+- nextRecommendedAction: "show_result" | "ask_human_confirmation" | "handoff_to_agent" | "stop"
+- nextReason: 推荐理由
+
+在 findings 中包含你通过工具获取的关键信息（如测试结果、类型检查错误等）。`
+  }
+
+  // analysis_only 模式（默认）
+  return basePrompt + `
+
+---
+
+## 执行模式说明（analysis_only）
 
 你正在 Harmony Agent Runtime 中以 **analysis_only** 模式运行。
 
@@ -172,35 +228,46 @@ function buildAgentResultFromToolUse(
  *   - produceLLMAgentResult：单轮调用，强制 produce_analysis 输出
  *   - 本函数：多轮循环，LLM 可以调用任意工具后最终产出分析
  */
+/**
+ * LLM-driven Agent Result producer — 多轮对话版本
+ *
+ * 使用 runTurnLoop 进行多轮 LLM 交互，支持工具调用链。
+ * 根据运行时模式自动选择执行器：
+ * - analysis_only：noopToolExecutor（不执行任何操作）
+ * - sandbox_execution：sandboxToolExecutor（沙箱内执行白名单命令）
+ */
 export async function produceLLMAgentResultWithTurnLoop(
   task: HarmonyTask,
   context?: unknown,
 ): Promise<AgentResult> {
   void context
   const agentId = task.targetAgentId
+  const runtimeMode = agentRuntimeConfig.mode
 
   if (!agentId || agentId === 'kelvin') {
     return produceDeterministicAgentResult(task)
   }
 
   try {
-    const { runTurnLoop } = await import('./turn-loop')
+    const { runTurnLoop, noopToolExecutor, createSandboxToolExecutor } = await import('./turn-loop')
     const { resolveAgentContext } = await import('./context-resolver')
 
     // 注入多 Agent 协作上下文
-    let systemPromptOverride: string | undefined
     const resolvedContext = await resolveAgentContext(
       agentId,
       task.id,
       task.conversationId,
     )
     if (resolvedContext) {
-      // 通过 system prompt 注入上下文（turn-loop 内部也会构建 prompt，这里做补充）
-      systemPromptOverride = undefined // 让 turn-loop 自己构建
       console.log(
         `[LLM-Producer/TurnLoop] Context available: ${resolvedContext.stats.completedResults} results, ${resolvedContext.stats.a2aMessages} messages`,
       )
     }
+
+    // 根据运行时模式选择执行器
+    const toolExecutor = runtimeMode === 'sandbox_execution'
+      ? createSandboxToolExecutor(agentId)
+      : noopToolExecutor
 
     const userMessage = [
       `## Task`,
@@ -210,7 +277,9 @@ export async function produceLLMAgentResultWithTurnLoop(
       `Route Reason: ${task.reason}`,
       task.targetAgentId ? `Assigned Agent: ${task.targetAgentId}` : '',
       '',
-      'Analyze this task. You may use tools if available, then produce your analysis.',
+      runtimeMode === 'sandbox_execution'
+        ? 'Execute tools as needed (tests, typecheck, lint, etc.), then produce your analysis.'
+        : 'Analyze this task. You may use tools if available, then produce your analysis.',
     ]
       .filter(Boolean)
       .join('\n')
@@ -220,19 +289,25 @@ export async function produceLLMAgentResultWithTurnLoop(
       task.id,
       [{ role: 'user', content: userMessage }],
       {
-        maxTurns: 5,
-        timeoutMs: 60_000,
-        tools: [], // 使用 Agent 核心工具
+        maxTurns: runtimeMode === 'sandbox_execution' ? 8 : 5,
+        timeoutMs: runtimeMode === 'sandbox_execution' ? 120_000 : 60_000,
+        tools: [], // 使用 Agent 核心工具 + 沙箱工具（由 runtimeMode 控制）
+        runtimeMode,
       },
-      undefined, // 使用默认 noop 执行器
-      systemPromptOverride,
+      toolExecutor,
     )
 
     // 从 turn-loop 结果中提取 AgentResult
     if (turnResult.success && turnResult.finalContent) {
-      // 尝试从最终内容中解析 JSON 结果
       const parsed = tryParseAgentResult(turnResult.finalContent)
       if (parsed) {
+        // 记录工具执行信息
+        if (turnResult.allToolCalls.length > 0) {
+          const toolSummary = turnResult.allToolCalls.map(
+            (tc) => `[${tc.name}] ${tc.success ? 'OK' : 'FAILED: ' + tc.error}`,
+          )
+          parsed.findings.push(...toolSummary)
+        }
         parsed.contextSnapshot = resolvedContext?.stats
         return parsed
       }
@@ -250,6 +325,11 @@ export async function produceLLMAgentResultWithTurnLoop(
 /**
  * LLM-driven Agent Result producer.
  * Uses Claude Sonnet with Tool Use for structured output.
+ *
+ * 根据运行时模式自动选择执行路径：
+ * - sandbox_execution：使用 TurnLoop 多轮执行（含沙箱工具）
+ * - analysis_only：单轮 produce_analysis 调用
+ *
  * Falls back to deterministic producer on any error.
  */
 export async function produceLLMAgentResult(
@@ -258,15 +338,21 @@ export async function produceLLMAgentResult(
 ): Promise<AgentResult> {
   void context
   const agentId = task.targetAgentId
+  const runtimeMode = agentRuntimeConfig.mode
 
   // Kelvin always requires human confirmation
   if (!agentId || agentId === 'kelvin') {
     return produceDeterministicAgentResult(task)
   }
 
+  // sandbox_execution 模式：使用 TurnLoop 多轮执行
+  if (runtimeMode === 'sandbox_execution') {
+    return produceLLMAgentResultWithTurnLoop(task, context)
+  }
+
   try {
     const provider = getLLMProvider()
-    let systemPrompt = getAgentSystemPrompt(agentId)
+    let systemPrompt = getAgentSystemPrompt(agentId, runtimeMode)
 
     // 注入多 Agent 协作上下文
     const resolvedContext = await resolveAgentContext(

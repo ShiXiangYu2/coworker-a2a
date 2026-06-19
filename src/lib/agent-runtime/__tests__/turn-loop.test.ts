@@ -1,35 +1,24 @@
 /**
  * Agent Turn Loop 测试
  *
- * 覆盖：单轮完成、多轮工具调用、达到上限终止、超时终止、Kelvin 拒绝
+ * 覆盖：单轮完成、多轮工具调用、达到上限终止、Kelvin 拒绝
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   runTurnLoop,
   noopToolExecutor,
-  type TurnLoopConfig,
   type ToolExecutor,
 } from '../turn-loop'
 
 // ─── Mock LLM Provider ────────────────────────────────────────────
 
-// 存储 mock 响应队列
-let mockResponses: Array<{
-  content?: string
-  toolUse?: { name: string; input: Record<string, unknown> }
-  stopReason: 'end_turn' | 'tool_use' | 'max_tokens'
-}> = []
+const mockChatFn = vi.fn()
 
 vi.mock('@/lib/llm', () => ({
   getLLMProvider: () => ({
     name: 'mock',
-    chat: vi.fn().mockImplementation(async () => {
-      if (mockResponses.length === 0) {
-        return { content: 'Done.', toolUse: undefined, stopReason: 'end_turn' as const }
-      }
-      return mockResponses.shift()!
-    }),
+    chat: mockChatFn,
     streamChat: vi.fn(),
   }),
 }))
@@ -37,7 +26,13 @@ vi.mock('@/lib/llm', () => ({
 // ─── Setup ─────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  mockResponses = []
+  mockChatFn.mockReset()
+  // 默认：返回纯文本完成
+  mockChatFn.mockResolvedValue({
+    content: 'Done.',
+    toolUse: undefined,
+    stopReason: 'end_turn',
+  })
 })
 
 // ─── noopToolExecutor 测试 ────────────────────────────────────────
@@ -68,8 +63,9 @@ describe('runTurnLoop - Kelvin', () => {
 
 describe('runTurnLoop - 单轮完成', () => {
   it('LLM 返回纯文本时，一轮完成', async () => {
-    mockResponses.push({
+    mockChatFn.mockResolvedValueOnce({
       content: 'Analysis complete.',
+      toolUse: undefined,
       stopReason: 'end_turn',
     })
 
@@ -86,8 +82,9 @@ describe('runTurnLoop - 单轮完成', () => {
   })
 
   it('LLM 返回空内容也算完成', async () => {
-    mockResponses.push({
+    mockChatFn.mockResolvedValueOnce({
       content: '',
+      toolUse: undefined,
       stopReason: 'end_turn',
     })
 
@@ -104,17 +101,16 @@ describe('runTurnLoop - 单轮完成', () => {
 
 describe('runTurnLoop - 多轮工具调用', () => {
   it('LLM 调用工具后返回文本，两轮完成', async () => {
-    // 第一轮：LLM 请求调用工具
-    mockResponses.push({
-      content: '',
-      toolUse: { name: 'noop.note', input: { note: 'test note' } },
-      stopReason: 'tool_use',
-    })
-    // 第二轮：LLM 返回最终文本
-    mockResponses.push({
-      content: 'Tool executed, analysis complete.',
-      stopReason: 'end_turn',
-    })
+    mockChatFn
+      .mockResolvedValueOnce({
+        content: '',
+        toolUse: { name: 'noop.note', input: { note: 'test note' } },
+        stopReason: 'tool_use',
+      })
+      .mockResolvedValueOnce({
+        content: 'Tool executed, analysis complete.',
+        stopReason: 'end_turn',
+      })
 
     const toolExecutor: ToolExecutor = vi.fn().mockResolvedValue({
       output: { recorded: true },
@@ -135,23 +131,21 @@ describe('runTurnLoop - 多轮工具调用', () => {
   })
 
   it('连续调用多个工具后完成', async () => {
-    // 第一轮：工具调用 A
-    mockResponses.push({
-      content: '',
-      toolUse: { name: 'noop.note', input: { note: 'step 1' } },
-      stopReason: 'tool_use',
-    })
-    // 第二轮：工具调用 B
-    mockResponses.push({
-      content: '',
-      toolUse: { name: 'noop.note', input: { note: 'step 2' } },
-      stopReason: 'tool_use',
-    })
-    // 第三轮：最终文本
-    mockResponses.push({
-      content: 'All steps completed.',
-      stopReason: 'end_turn',
-    })
+    mockChatFn
+      .mockResolvedValueOnce({
+        content: '',
+        toolUse: { name: 'noop.note', input: { note: 'step 1' } },
+        stopReason: 'tool_use',
+      })
+      .mockResolvedValueOnce({
+        content: '',
+        toolUse: { name: 'noop.note', input: { note: 'step 2' } },
+        stopReason: 'tool_use',
+      })
+      .mockResolvedValueOnce({
+        content: 'All steps completed.',
+        stopReason: 'end_turn',
+      })
 
     const toolExecutor: ToolExecutor = vi.fn().mockResolvedValue({
       output: { ok: true },
@@ -175,7 +169,7 @@ describe('runTurnLoop - 达到上限终止', () => {
   it('达到 maxTurns 时终止', async () => {
     // 持续返回工具调用，不返回文本
     for (let i = 0; i < 10; i++) {
-      mockResponses.push({
+      mockChatFn.mockResolvedValueOnce({
         content: '',
         toolUse: { name: 'noop.note', input: { note: `loop ${i}` } },
         stopReason: 'tool_use',
@@ -202,27 +196,23 @@ describe('runTurnLoop - 达到上限终止', () => {
 
 describe('runTurnLoop - 超时终止', () => {
   it('超过 timeoutMs 时终止', async () => {
-    // Mock 一个很慢的 LLM 响应
     let callCount = 0
-    vi.mocked((await import('@/lib/llm')).getLLMProvider().chat).mockImplementation(
-      async () => {
-        callCount++
-        if (callCount === 1) {
-          // 第一次调用：正常返回工具调用
-          return {
-            content: '',
-            toolUse: { name: 'noop.note', input: { note: 'slow' } },
-            stopReason: 'tool_use',
-          }
-        }
-        // 第二次调用：模拟超时（通过延迟）
-        await new Promise((resolve) => setTimeout(resolve, 200))
+    mockChatFn.mockImplementation(async () => {
+      callCount++
+      if (callCount === 1) {
         return {
-          content: 'Finally done.',
-          stopReason: 'end_turn',
+          content: '',
+          toolUse: { name: 'noop.note', input: { note: 'slow' } },
+          stopReason: 'tool_use',
         }
-      },
-    )
+      }
+      // 第二次调用延迟超过 timeout
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      return {
+        content: 'Finally done.',
+        stopReason: 'end_turn',
+      }
+    })
 
     const toolExecutor: ToolExecutor = vi.fn().mockResolvedValue({
       output: { ok: true },
@@ -242,15 +232,16 @@ describe('runTurnLoop - 超时终止', () => {
 
 describe('runTurnLoop - 工具执行错误', () => {
   it('工具执行失败时记录错误并继续', async () => {
-    mockResponses.push({
-      content: '',
-      toolUse: { name: 'failing.tool', input: {} },
-      stopReason: 'tool_use',
-    })
-    mockResponses.push({
-      content: 'Recovery after error.',
-      stopReason: 'end_turn',
-    })
+    mockChatFn
+      .mockResolvedValueOnce({
+        content: '',
+        toolUse: { name: 'failing.tool', input: {} },
+        stopReason: 'tool_use',
+      })
+      .mockResolvedValueOnce({
+        content: 'Recovery after error.',
+        stopReason: 'end_turn',
+      })
 
     const toolExecutor: ToolExecutor = vi.fn().mockRejectedValue(
       new Error('Tool execution failed'),
@@ -272,9 +263,7 @@ describe('runTurnLoop - 工具执行错误', () => {
 
 describe('runTurnLoop - LLM 错误', () => {
   it('LLM 调用失败时返回错误结果', async () => {
-    vi.mocked((await import('@/lib/llm')).getLLMProvider().chat).mockRejectedValue(
-      new Error('API rate limit'),
-    )
+    mockChatFn.mockRejectedValueOnce(new Error('API rate limit'))
 
     const result = await runTurnLoop('jobs', 'task-1', [
       { role: 'user', content: 'Error test' },
@@ -292,7 +281,7 @@ describe('runTurnLoop - 默认配置', () => {
   it('使用默认配置时 maxTurns=10', async () => {
     // 持续返回工具调用
     for (let i = 0; i < 15; i++) {
-      mockResponses.push({
+      mockChatFn.mockResolvedValueOnce({
         content: '',
         toolUse: { name: 'noop.note', input: { note: `${i}` } },
         stopReason: 'tool_use',

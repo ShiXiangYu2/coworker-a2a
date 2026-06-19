@@ -14,6 +14,10 @@
 import { randomUUID } from 'node:crypto'
 import {
   executeInSandbox,
+<<<<<<< Updated upstream
+=======
+  matchCommandWhitelist,
+>>>>>>> Stashed changes
   checkForbiddenPatterns,
   type SandboxExecutionResult,
   type CommandWhitelistEntry,

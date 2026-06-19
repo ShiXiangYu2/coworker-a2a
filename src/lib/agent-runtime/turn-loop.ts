@@ -18,6 +18,11 @@ import type { AgentId } from '@/lib/agents/types'
 import { getAgentById } from '@/lib/agents/registry'
 import { buildAgentSystemPrompt } from '@/lib/agents/prompts/skills'
 import { getCoreToolsForAgent, isToolAllowedForAgent } from '@/lib/tools/registry'
+import {
+  createSandboxToolExecutor as createSandboxExecutor,
+  SANDBOX_TOOL_DEFINITIONS,
+} from '@/lib/tools/sandbox-tool-executor'
+import type { AgentRuntimeMode } from './types'
 
 // ─── 类型定义 ──────────────────────────────────────────────────────
 
@@ -32,6 +37,8 @@ export interface TurnLoopConfig {
   temperature?: number
   /** 最大输出 token 数 */
   maxTokens?: number
+  /** 运行时模式（影响工具可用性） */
+  runtimeMode?: AgentRuntimeMode
 }
 
 export interface TurnToolCall {
@@ -116,6 +123,21 @@ export async function noopToolExecutor(
   }
 }
 
+/**
+ * 创建沙箱工具执行器（便捷函数）
+ *
+ * 在 sandbox_execution 模式下使用，对接 sandbox-tool-executor.ts
+ *
+ * @param agentId 执行 Agent 的 ID
+ * @param cwd 工作目录（默认 process.cwd()）
+ */
+export function createSandboxToolExecutor(
+  agentId: string,
+  cwd?: string,
+): ToolExecutor {
+  return createSandboxExecutor(agentId, { cwd })
+}
+
 // ─── 核心循环 ──────────────────────────────────────────────────────
 
 /**
@@ -156,8 +178,8 @@ export async function runTurnLoop(
   // 构建 system prompt
   const systemPrompt = systemPromptOverride ?? buildSystemPrompt(agentId)
 
-  // 构建工具定义列表
-  const toolDefs = buildToolDefinitions(agentId, mergedConfig.tools)
+  // 构建工具定义列表（根据运行时模式选择工具集）
+  const toolDefs = buildToolDefinitions(agentId, mergedConfig.tools, mergedConfig.runtimeMode)
 
   // 对话历史（可变）
   const conversation: ChatMessage[] = [...messages]
@@ -183,6 +205,22 @@ export async function runTurnLoop(
       // 累计 token 用量（LLMChatResult 暂无 usage 字段，用 0 占位）
       totalUsage.inputTokens += 0
       totalUsage.outputTokens += 0
+
+      // LLM 调用后检查超时（调用本身可能耗时很长）
+      if (Date.now() >= deadline) {
+        turns.push({
+          turnIndex,
+          role: 'assistant',
+          content: result.content || '',
+          usage: { inputTokens: 0, outputTokens: 0 },
+          finished: true,
+          finishReason: 'timeout',
+          durationMs: Date.now() - turnStart,
+        })
+        finished = true
+        finishReason = 'timeout'
+        break
+      }
 
       if (result.toolUse) {
         // LLM 请求调用工具
@@ -318,11 +356,16 @@ function buildSystemPrompt(agentId: Exclude<AgentId, 'kelvin'>): string {
 /**
  * 构建工具定义列表（转为 LLMToolDefinition 格式）
  *
+ * 根据运行时模式选择工具集：
+ * - analysis_only：仅核心工具（noop、read_simulated 等）
+ * - sandbox_execution：核心工具 + 沙箱命令工具
+ *
  * 优先使用 config.tools 指定的工具，否则使用 Agent 核心工具
  */
 function buildToolDefinitions(
   agentId: Exclude<AgentId, 'kelvin'>,
   toolIds: string[],
+  runtimeMode: AgentRuntimeMode = 'analysis_only',
 ): LLMToolDefinition[] {
   // 如果指定了工具 ID，按 ID 过滤
   if (toolIds.length > 0) {
@@ -335,11 +378,18 @@ function buildToolDefinitions(
       }))
   }
 
-  // 否则使用 Agent 核心工具
+  // 基础工具：Agent 核心工具
   const coreTools = getCoreToolsForAgent(agentId)
-  return coreTools.map((tool) => ({
+  const baseToolDefs: LLMToolDefinition[] = coreTools.map((tool) => ({
     name: tool.id,
     description: tool.description,
     input_schema: tool.inputSchema as Record<string, unknown>,
   }))
+
+  // sandbox_execution 模式下追加沙箱命令工具
+  if (runtimeMode === 'sandbox_execution') {
+    return [...baseToolDefs, ...SANDBOX_TOOL_DEFINITIONS]
+  }
+
+  return baseToolDefs
 }

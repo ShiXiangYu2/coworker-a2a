@@ -307,7 +307,7 @@ describe('isToolAllowedForAgent', () => {
 describe('getToolsByCategory', () => {
   it('返回指定类别的工具', () => {
     const noopTools = getToolsByCategory('internal_noop')
-    expect(noopTools.length).toBeGreaterThanOrThanOrEqual(1)
+    expect(noopTools.length).toBeGreaterThanOrEqual(1)
     expect(noopTools.every((t) => t.category === 'internal_noop')).toBe(true)
   })
 

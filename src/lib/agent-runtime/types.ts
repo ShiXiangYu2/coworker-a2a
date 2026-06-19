@@ -1,7 +1,14 @@
 import type { AgentId, RouteSideEffects } from '@/lib/agents/types'
 import type { ToolCallCandidate } from '@/lib/tools/types'
 
-export type AgentRuntimeMode = 'analysis_only'
+/**
+ * Agent 运行时模式
+ *
+ * - analysis_only: Sprint 1-22，Agent 只产出结构化分析，不执行任何工具
+ * - sandbox_execution: Sprint 23+，Agent 可在沙箱内执行白名单命令
+ *   （测试、lint、类型检查、git 只读操作等）
+ */
+export type AgentRuntimeMode = 'analysis_only' | 'sandbox_execution'
 export type AgentRunStatus =
   | 'created'
   | 'running'
@@ -180,12 +187,10 @@ export interface StartAgentRunInput {
 export const agentRuntimeConfig: AgentRuntime = {
   id: 'controlled_agent_runtime',
   name: 'controlled_agent_runtime',
-  version: 'sprint-4',
-  mode: 'analysis_only',
+  version: 'sprint-23',
+  mode: 'sandbox_execution',
   enabledAgentIds: ['elon', 'jobs', 'linus', 'turing', 'bezos'],
   forbiddenActions: [
-    'execute-tool',
-    'run-shell-command',
     'write-file',
     'edit-file',
     'delete-file',
@@ -207,5 +212,15 @@ export const agentRuntimeConfig: AgentRuntime = {
   createdAt: '2026-06-15T00:00:00.000Z',
 }
 
-export const agentRuntimeSafetyNote =
-  'Sprint 4 only produces structured analysis and does not execute tools, commands, file edits, PRs, deploys, deletes, or memory writes.'
+/**
+ * 运行时安全说明（根据模式动态生成）
+ */
+export function getAgentRuntimeSafetyNote(mode: AgentRuntimeMode): string {
+  if (mode === 'sandbox_execution') {
+    return 'Sprint 23 sandbox_execution mode: Agents can execute whitelisted commands (test, lint, typecheck, git-read) in a sandboxed environment. Shell, git-write, file-write, PRs, deploys, and external APIs remain forbidden.'
+  }
+  return 'Analysis-only mode: produces structured analysis and does not execute tools, commands, file edits, PRs, deploys, deletes, or memory writes.'
+}
+
+/** 向后兼容：默认安全说明 */
+export const agentRuntimeSafetyNote = getAgentRuntimeSafetyNote('sandbox_execution')
