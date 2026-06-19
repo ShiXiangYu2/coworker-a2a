@@ -52,7 +52,9 @@ export function ChatClient({
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+        },
         body: JSON.stringify({ conversationId, message: text }),
       })
 
@@ -64,58 +66,94 @@ export function ChatClient({
       const decoder = new TextDecoder()
       let assistantContent = ''
       let assistantId = ''
+      let streamBuffer = ''
+      let streamDone = false
       const streamId = `stream-${Date.now()}`
 
-      while (true) {
+      const processStreamBuffer = () => {
+        const blocks = streamBuffer.split('\n\n')
+        streamBuffer = blocks.pop() ?? ''
+
+        for (const block of blocks) {
+          const data = block
+            .split('\n')
+            .filter((line) => line.startsWith('data: '))
+            .map((line) => line.slice(6))
+            .join('\n')
+
+          if (!data) continue
+
+          let event: { type?: string; content?: string; error?: string; messageId?: string }
+          try {
+            event = JSON.parse(data)
+          } catch {
+            continue
+          }
+
+          if (event.type === 'delta' && event.content) {
+            assistantContent += event.content
+            setMessages((prev) => {
+              const existing = prev.find((msg) => msg.id === streamId)
+              if (existing) {
+                return prev.map((msg) =>
+                  msg.id === streamId ? { ...msg, content: assistantContent } : msg
+                )
+              }
+
+              return [
+                ...prev,
+                {
+                  id: streamId,
+                  role: 'assistant',
+                  content: assistantContent,
+                  status: 'streaming',
+                  createdAt: new Date().toISOString(),
+                },
+              ]
+            })
+          }
+
+          if (event.type === 'error' && event.error) {
+            setError(String(event.error))
+          }
+
+          if (event.type === 'done') {
+            if (event.messageId) {
+              assistantId = event.messageId
+            }
+            streamDone = true
+          }
+        }
+      }
+
+      while (!streamDone) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
+        streamBuffer += decoder.decode(value, { stream: true })
+        processStreamBuffer()
+      }
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6)
+      streamBuffer += decoder.decode()
+      if (streamBuffer.trim()) {
+        streamBuffer += '\n\n'
+        processStreamBuffer()
+      }
 
-          try {
-            const event = JSON.parse(data)
-
-            if (event.type === 'delta' && event.content) {
-              assistantContent += event.content
-              setMessages((prev) => {
-                const existing = prev.find((msg) => msg.id === streamId)
-                if (existing) {
-                  return prev.map((msg) =>
-                    msg.id === streamId ? { ...msg, content: assistantContent } : msg
-                  )
-                }
-
-                return [
-                  ...prev,
-                  {
-                    id: streamId,
-                    role: 'assistant',
-                    content: assistantContent,
-                    status: 'streaming',
-                    createdAt: new Date().toISOString(),
-                  },
-                ]
-              })
-            }
-
-            if (event.type === 'done' && event.messageId) {
-              assistantId = event.messageId
-            }
-          } catch {
-            // Ignore keep-alive or partial stream lines.
-          }
-        }
+      if (streamDone) {
+        await reader.cancel().catch(() => undefined)
       }
 
       if (assistantId) {
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === streamId ? { ...msg, id: assistantId, status: 'complete' } : msg
+          )
+        )
+      } else if (assistantContent) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === streamId ? { ...msg, status: 'complete' } : msg
           )
         )
       }

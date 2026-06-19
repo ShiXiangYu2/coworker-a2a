@@ -1,10 +1,10 @@
 import {
+  getRuntimeDispatchJobById,
   getRuntimeExecutionReceiptByJobId,
   listRuntimeDispatchAttempts,
   listRuntimeRecoveryPoints,
   RuntimeExecutionApiError,
 } from './repository'
-import { runRuntimeDispatchJobOnce } from './runner'
 import { SPRINT_22_SAFETY_NOTE } from './types'
 
 export interface RuntimeVerifyOnceInput {
@@ -20,13 +20,11 @@ export async function verifyRuntimeDispatchJobOnce(input: RuntimeVerifyOnceInput
   if (!jobId) throw new RuntimeExecutionApiError('jobId is required.')
   if (!workerId) throw new RuntimeExecutionApiError('workerId is required.')
 
-  const run = await runRuntimeDispatchJobOnce({
-    jobId,
-    workerId,
-    mode: 'dry_run',
-    leaseDurationMs: input.leaseDurationMs,
-    now: input.now,
-  })
+  // 获取 job 状态
+  const job = await getRuntimeDispatchJobById(jobId)
+  if (!job) throw new RuntimeExecutionApiError('Runtime dispatch job not found.', 404)
+
+  // 获取相关记录
   const attempts = await listRuntimeDispatchAttempts(jobId)
   const receipt = await getRuntimeExecutionReceiptByJobId(jobId)
   const recovery = await listRuntimeRecoveryPoints(jobId)
@@ -35,12 +33,15 @@ export async function verifyRuntimeDispatchJobOnce(input: RuntimeVerifyOnceInput
     ok: true,
     jobId,
     workerId,
-    mode: 'dry_run' as const,
-    run: {
-      claimStatus: run.claim.record.status,
-      startStatus: run.start.record.status,
-      completionStatus: run.completion.record.status,
-      receiptStatus: run.completion.receipt.status,
+    job: {
+      id: job.id,
+      status: job.status,
+      attemptCount: job.attemptCount,
+      connectorId: job.connectorId,
+      actionType: job.actionType,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
     },
     audit: {
       attempts,

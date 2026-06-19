@@ -1,18 +1,25 @@
 import Link from 'next/link'
 import {
+  AgentSkillToolPanorama,
   AgentStats,
   AuditTimeline,
+  ConceptGovernancePanel,
   DepartmentAssignmentPanel,
   DepartmentEvidenceMapPanel,
   DepartmentPanel,
   EvalPanel,
   EvidencePanel,
   ExecutionGatewayPanel,
+  GovernanceDebtPanel,
+  JudgmentPanel,
   LatestRuntimeExecutionPanel,
   MultiAgentFlow,
   OperatorOverview,
+  RuntimeControlCenter,
   RuntimeExecutionPanel,
+  SystemExperiencePanel,
   TaskBoard,
+  TaskGraph,
   ToolBoundaryPanel,
 } from '@/components/operator-console'
 import type { RuntimeExecutionHighlightedSection } from '@/components/operator-console'
@@ -149,6 +156,9 @@ export default async function OperatorConsole({
                 highlightedNodeId={taskFlowNodeId}
               />
             </div>
+            <div className="xl:col-span-2">
+              <TaskGraph />
+            </div>
           </div>
         </section>
 
@@ -158,6 +168,7 @@ export default async function OperatorConsole({
             description="Sprint 22 单任务运行态只读视图，只展示限定记录，不暴露 worker、token、connector 或 mutation 控制。"
           />
           <div className="grid gap-4">
+            <RuntimeControlCenter />
             <ExecutionGatewayPanel />
             <div className="space-y-3">
               <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
@@ -195,6 +206,11 @@ export default async function OperatorConsole({
             <EvalPanel />
             <EvidencePanel />
             <ToolBoundaryPanel />
+            <JudgmentPanel />
+            <GovernanceDebtPanel />
+            <ConceptGovernancePanel />
+            <SystemExperiencePanel />
+            <AgentSkillToolPanorama />
             <div className="xl:col-span-2">
               <DepartmentPanel />
             </div>

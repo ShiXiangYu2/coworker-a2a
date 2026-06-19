@@ -38,6 +38,13 @@ export type KnowledgeItemKind =
   | 'workflow'
   | 'contract'
   | 'decision_record'
+  | 'workflow_template'      // 高质量 workflow 模板
+  | 'execution_plan'         // 可复用 execution plan
+  | 'judgment_pattern'       // 常见判断模式
+  | 'resolved_debt_case'     // 已关闭债务案例
+  | 'failure_pattern'        // 失败模式与修复套路
+  | 'evidence_snapshot'      // 高价值 evidence snapshot
+  | 'system_experience'      // 系统经验总结
   | 'other'
 
 export type KnowledgeScope = 'global' | 'project' | 'sprint' | 'agent'

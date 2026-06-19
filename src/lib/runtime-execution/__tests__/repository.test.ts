@@ -379,7 +379,7 @@ describe('Sprint 22 runtime execution repository skeleton', () => {
     expect(result.record.status).toBe('succeeded')
     expect(result.token.status).toBe('consumed')
     expect(result.receipt.status).toBe('dry_run')
-    expect(result.recovery.recoveryKind).toBe('post_execute')
+    expect(result.recovery?.recoveryKind).toBe('post_execute')
   })
 
   it('rejects dry-run completion when job is not running or lease owner mismatches', async () => {

@@ -1,19 +1,249 @@
 @import "tailwindcss";
 
+/* ===== AI-Native UI Design System ===== */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* AI/Chatbot Platform Color Palette */
+  --background: #FAF5FF;
+  --foreground: #1E1B4B;
+  --primary: #7C3AED;
+  --primaryForeground: #FFFFFF;
+  --secondary: #A78BFA;
+  --secondaryForeground: #0F172A;
+  --accent: #0891B2;
+  --accentForeground: #FFFFFF;
+  --card: #FFFFFF;
+  --cardForeground: #1E1B4B;
+  --muted: #ECEEF9;
+  --mutedForeground: #64748B;
+  --border: #DDD6FE;
+  --destructive: #DC2626;
+  --destructiveForeground: #FFFFFF;
+  --ring: #7C3AED;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary: var(--primary);
+  --color-primaryForeground: var(--primaryForeground);
+  --color-secondary: var(--secondary);
+  --color-secondaryForeground: var(--secondaryForeground);
+  --color-accent: var(--accent);
+  --color-accentForeground: var(--accentForeground);
+  --color-card: var(--card);
+  --color-cardForeground: var(--cardForeground);
+  --color-muted: var(--muted);
+  --color-mutedForeground: var(--mutedForeground);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructiveForeground: var(--destructiveForeground);
+  --color-ring: var(--ring);
+
+  --font-sans: "DM Sans", sans-serif;
+  --font-heading: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* ===== Global Reset & Base ===== */
+
+* {
+  border-radius: 12px;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: "DM Sans", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== Typography ===== */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Space Grotesk", sans-serif;
+}
+
+/* ===== Button Styles ===== */
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primaryForeground);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 200ms ease-out;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #6D28D9;
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.btn-secondary {
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 200ms ease-out;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: var(--muted);
+  border-color: var(--primary);
+}
+
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ===== Card Styles ===== */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  transition: all 200ms ease-out;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--secondary);
+}
+
+/* ===== Input Styles ===== */
+
+.input {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  transition: all 200ms ease-out;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+}
+
+.input::placeholder {
+  color: var(--mutedForeground);
+}
+
+/* ===== Chat Bubble ===== */
+
+.chat-bubble {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px 16px 16px 4px;
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.chat-bubble.user {
+  background: var(--primary);
+  color: var(--primaryForeground);
+  border-color: var(--primary);
+  border-radius: 16px 16px 4px 16px;
+}
+
+/* ===== Typing Indicator ===== */
+
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 0.75rem 1rem;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background: var(--primary);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+.typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+/* ===== Fade In Animation ===== */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* ===== Streaming Text ===== */
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.cursor-blink::after {
+  content: "▋";
+  animation: blink 1s infinite;
+  color: var(--primary);
+  margin-left: 2px;
+}
+
+/* ===== Scrollbar Styling ===== */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--secondary);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* ===== Selection Styling ===== */
+::selection {
+  background: var(--primary);
+  color: var(--primaryForeground);
 }

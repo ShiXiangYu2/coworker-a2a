@@ -47,6 +47,8 @@ ${getAgents()
 Use route_to_agent for single-agent routing, or decompose_task for multi-agent decomposition.`
 
 /** 子任务定义 */
+const ROUTER_LLM_TIMEOUT_MS = Number(process.env.ROUTER_LLM_TIMEOUT_MS ?? 5000)
+
 export interface SubTask {
   agentId: 'jobs' | 'linus' | 'turing' | 'bezos'
   title: string
@@ -238,13 +240,16 @@ export async function routeMessageLLM(
 
   try {
     const provider = getLLMProvider()
-    const result = await provider.chat(
-      [{ role: 'user', content: input.message }],
-      CEO_SYSTEM_PROMPT,
-      {
-        tools: [routeTool, decomposeTool],
-        maxTokens: 2048,
-      }
+    const result = await withTimeout(
+      provider.chat(
+        [{ role: 'user', content: input.message }],
+        CEO_SYSTEM_PROMPT,
+        {
+          tools: [routeTool, decomposeTool],
+          maxTokens: 2048,
+        }
+      ),
+      ROUTER_LLM_TIMEOUT_MS
     )
 
     if (result.toolUse) {
@@ -283,4 +288,27 @@ export async function routeMessageLLM(
     // On any LLM error, fall back to keyword-based routing
     return routeMessage(input)
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return promise
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Router LLM timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }

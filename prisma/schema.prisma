@@ -1057,6 +1057,70 @@ model CollaborationDecision {
   @@map("collaboration_decisions")
 }
 
+// 判断记录系统：记录 AI 为什么做出某个选择
+model JudgmentRecord {
+  id                     String   @id @default(cuid())
+  idempotencyKey         String?  @unique
+  correlationId          String
+  taskId                 String?
+  judgmentType           String   // route_to_agent, allow_tool, reject_tool, approve_plan, review_conclusion
+  targetType             String   // task, agent_run, tool_call, workflow, review
+  targetId               String
+  title                  String
+  reason                 String
+  evidence               String   @default("[]")  // JSON array of evidence refs
+  status                 String   @default("active")  // active, superseded, archived
+  supersededByRecordId   String?
+  confidence             Float    @default(0)
+  metadataJson          String   @default("{}")
+  createdBy              String
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([taskId])
+  @@index([judgmentType])
+  @@index([targetType, targetId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("judgment_records")
+}
+
+// 治理债务登记系统：统一记录系统中的问题和债务
+model GovernanceDebt {
+  id                     String   @id @default(cuid())
+  idempotencyKey         String?  @unique
+  correlationId          String
+  taskId                 String?
+  debtType               String   // drift, tool_permission_gap, rule_inconsistency, prompt_quality, execution_reliability, evidence_gap
+  severity               String   // low, medium, high, critical
+  title                  String
+  description            String
+  source                 String   // eval, review, audit, manual
+  sourceId               String?
+  evidence               String   @default("[]")  // JSON array of evidence refs
+  blockedByDebtIdsJson   String   @default("[]")  // JSON array of debt IDs that block this one
+  blocksExecution        Boolean  @default(false)
+  status                 String   @default("open")  // open, in_progress, resolved, wontfix, archived
+  resolution             String?
+  resolvedAt             DateTime?
+  resolvedBy             String?
+  createdBy              String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([correlationId])
+  @@index([taskId])
+  @@index([debtType])
+  @@index([severity])
+  @@index([status])
+  @@index([blocksExecution])
+  @@index([createdAt])
+  @@map("governance_debts")
+}
+
 model FileChangeProposal {
   id                       String   @id @default(cuid())
   idempotencyKey           String?  @unique
@@ -3477,4 +3541,128 @@ model DepartmentAssignmentAuditRecord {
   @@index([correlationId])
   @@index([createdAt])
   @@map("department_assignment_audit_records")
+}
+
+// ─── Sprint 23: Worker Daemon ────────────────────────────────────
+// Safety: WorkerInstance, TaskQueueJob, and WorkerHeartbeat are local execution
+// infrastructure records. They enable asynchronous task processing but do not
+// grant runtime permissions, route tasks, or complete tasks autonomously.
+// All worker actions are audited and subject to existing governance boundaries.
+
+model WorkerInstance {
+  id                String   @id
+  workerId          String   @unique
+  status            String   @default("offline")   // online | offline | draining
+  capabilitiesJson  String   @default("[]")        // ["sandbox", "git", "api", "deploy"]
+  maxConcurrent     Int      @default(1)
+  currentJobId      String?
+  lastHeartbeatAt   DateTime @default(now())
+  startedAt         DateTime @default(now())
+  stoppedAt         DateTime?
+
+  @@index([status])
+  @@index([lastHeartbeatAt])
+  @@map("worker_instances")
+}
+
+model TaskQueueJob {
+  id                       String   @id @default(cuid())
+  idempotencyKey           String?  @unique
+  taskId                   String
+  correlationId            String
+  priority                 Int      @default(2)       // 0=紧急, 1=高, 2=普通, 3=低
+  status                   String   @default("pending") // pending | assigned | running | completed | failed | dead_letter
+  requiredCapabilitiesJson String   @default("[]")    // ["sandbox", "git"]
+  requiredAgentRolesJson   String   @default("[]")    // ["engineering", "verification"]
+  maxRetries               Int      @default(3)
+  retryCount               Int      @default(0)
+  timeoutMs                Int      @default(60000)
+  scheduledAt              DateTime @default(now())
+  assignedWorkerId         String?
+  leaseExpiresAt           DateTime?
+  lastErrorJson            String?
+  attemptCount             Int      @default(0)
+  startedAt                DateTime?
+  completedAt              DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([status, priority])
+  @@index([assignedWorkerId])
+  @@index([taskId])
+  @@index([scheduledAt])
+  @@index([idempotencyKey])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@map("task_queue_jobs")
+}
+
+model WorkerHeartbeat {
+  id          String   @id @default(cuid())
+  workerId    String
+  jobId       String?
+  status      String   @default("idle")  // idle | busy | draining
+  metricsJson String   @default("{}")    // {"activeJobs":0,"completedToday":5,"avgDurationMs":12000}
+  createdAt   DateTime @default(now())
+
+  @@index([workerId])
+  @@index([createdAt])
+  @@map("worker_heartbeats")
+}
+
+// 概念治理 / 规则中枢
+model ConceptGlossary {
+  id                     String   @id @default(cuid())
+  idempotencyKey         String?  @unique
+  conceptType            String   // term, risk_classification, execution_boundary, lifecycle_phase, review_criteria, policy
+  name                   String
+  displayName            String
+  description            String
+  definition             String   @default("{}")  // JSON object with detailed definition
+  applicableToJson       String   @default("[]")  // JSON array of applicable contexts
+  relatedConceptsJson    String   @default("[]")  // JSON array of related concept IDs
+  examplesJson           String   @default("[]")  // JSON array of examples
+  status                 String   @default("active")  // active, deprecated, draft
+  version                Int      @default(1)
+  createdBy              String
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([conceptType])
+  @@index([name])
+  @@index([status])
+  @@index([createdAt])
+  @@map("concept_glossary")
+}
+
+model PolicyRecord {
+  id                     String   @id @default(cuid())
+  idempotencyKey         String?  @unique
+  policyType             String   // tool_permission, agent_routing, execution_safety, review_criteria, risk_assessment
+  name                   String
+  displayName            String
+  description            String
+  rulesJson              String   @default("[]")  // JSON array of policy rules
+  constraintsJson        String   @default("[]")  // JSON array of constraints
+  applicableToJson       String   @default("[]")  // JSON array of applicable contexts
+  riskLevel              String   @default("low")
+  requiresHumanApproval  Boolean  @default(false)
+  status                 String   @default("active")  // active, deprecated, draft
+  version                Int      @default(1)
+  effectiveFrom          DateTime?
+  effectiveUntil         DateTime?
+  createdBy              String
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([policyType])
+  @@index([name])
+  @@index([status])
+  @@index([riskLevel])
+  @@index([createdAt])
+  @@map("policy_records")
 }

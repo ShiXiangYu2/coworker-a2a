@@ -27,13 +27,42 @@ import {
   createRunRequestRecord,
   updateRunRequestRecordStatus,
 } from '@/lib/run-requests/repository'
+import { getRateLimiter, RateLimiter } from '@/lib/security/rate-limit'
 import type { ChatMessage } from '@/lib/llm'
+
+// 消息长度限制
+const MAX_MESSAGE_LENGTH = 10000
 
 export async function POST(request: NextRequest) {
   let runCorrelationId: string | null = null
   let runRequestRecordId: string | null = null
 
   try {
+    // 速率限制检查
+    const rateLimiter = getRateLimiter('chat')
+    const clientKey = RateLimiter.getClientKey(request)
+    const rateLimitResult = rateLimiter.check(clientKey)
+
+    if (!rateLimitResult.allowed) {
+      return Response.json(
+        {
+          ok: false,
+          error: {
+            message: `请求过于频繁，请在 ${rateLimitResult.retryAfter} 秒后重试。`,
+          },
+        },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': '10',
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': rateLimitResult.resetAt.toISOString(),
+            'Retry-After': String(rateLimitResult.retryAfter),
+          },
+        }
+      )
+    }
+
     const body = await request.json()
     const { conversationId, message } = body
 
@@ -41,6 +70,14 @@ export async function POST(request: NextRequest) {
     if (!message || typeof message !== 'string' || !message.trim()) {
       return new Response(
         JSON.stringify({ error: '请输入消息内容' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // 消息长度限制
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: `消息长度不能超过 ${MAX_MESSAGE_LENGTH} 个字符` }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       )
     }
@@ -103,14 +140,15 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 3. 获取对话历史（最近 20 条）
+    // 3. 获取对话历史（最近 20 条，按时间倒序获取后反转）
     const history = await prisma.message.findMany({
       where: { conversationId: convId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: 20,
     })
 
-    const chatMessages: ChatMessage[] = history.map((msg) => ({
+    // 反转数组，使消息按时间正序排列
+    const chatMessages: ChatMessage[] = history.reverse().map((msg) => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
     }))

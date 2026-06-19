@@ -517,11 +517,12 @@ export async function claimRuntimeDispatchJobById(args: {
       status: 'leased',
       leaseOwner: workerId,
       leaseExpiresAt,
+      attemptCount: current.attemptCount + 1,
     },
   })
   const attempt = await createRuntimeDispatchAttempt({
     jobId: updated.id,
-    attempt: current.attemptCount + 1,
+    attempt: updated.attemptCount,
     status: 'leased',
     workerId,
     startedAt: now.toISOString(),
@@ -792,17 +793,38 @@ export async function completeRuntimeDispatchJobDryRun(args: {
     completedAt: now.toISOString(),
     correlationId: record.correlationId,
   })
-  const recovery = await createRuntimeRecoveryPoint({
-    jobId: record.id,
-    attemptId: `dry-run-${record.id}`,
-    recoveryKind: 'post_execute',
-    snapshot: args.snapshot ?? {
-      dryRun: true,
-      receiptId: receipt.record.id,
-      tokenStatus: token.status,
-      status: record.status,
-    },
+
+  // 获取最新的 attempt 记录
+  const latestAttempt = await prisma.runtimeDispatchAttempt.findFirst({
+    where: { jobId: record.id },
+    orderBy: { attempt: 'desc' },
   })
+
+  // 只有在存在 attempt 记录时才创建 recovery point
+  if (latestAttempt) {
+    const recovery = await createRuntimeRecoveryPoint({
+      jobId: record.id,
+      attemptId: latestAttempt.id,
+      recoveryKind: 'post_execute',
+      snapshot: args.snapshot ?? {
+        dryRun: true,
+        receiptId: receipt.record.id,
+        tokenStatus: token.status,
+        status: record.status,
+      },
+    })
+    const auditEvent = await createRuntimeExecutionAuditEvent({
+      correlationId: record.correlationId,
+      entityType: 'RuntimeDispatchJob',
+      entityId: record.id,
+      eventType: 'runtime_dispatch_job.completed_dry_run',
+      actorType: 'worker',
+      reason: `Worker ${workerId} completed the runtime dispatch job as dry-run only.`,
+    })
+    return { record, token, receipt: receipt.record, recovery: recovery.record, auditEvent, safetyNote: SPRINT_22_SAFETY_NOTE }
+  }
+
+  // 没有 attempt 记录时，只返回 receipt
   const auditEvent = await createRuntimeExecutionAuditEvent({
     correlationId: record.correlationId,
     entityType: 'RuntimeDispatchJob',
@@ -811,7 +833,7 @@ export async function completeRuntimeDispatchJobDryRun(args: {
     actorType: 'worker',
     reason: `Worker ${workerId} completed the runtime dispatch job as dry-run only.`,
   })
-  return { record, token, receipt: receipt.record, recovery: recovery.record, auditEvent, safetyNote: SPRINT_22_SAFETY_NOTE }
+  return { record, token, receipt: receipt.record, recovery: null, auditEvent, safetyNote: SPRINT_22_SAFETY_NOTE }
 }
 
 export async function completeRuntimeDispatchJobObsidianWrite(args: {

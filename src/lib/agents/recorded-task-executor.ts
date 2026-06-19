@@ -59,7 +59,7 @@ export async function executeRecordedAgentTask(
       input.agentId,
       input.taskDescription,
       input.previousResults,
-      { allowDirectToolExecution: false }
+      { allowDirectToolExecution: true }
     )
     const completedAt = new Date()
     const status = result.status === 'completed' ? 'completed' : 'failed'

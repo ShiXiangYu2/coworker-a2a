@@ -22,7 +22,7 @@ Code quality analysis completed. Lint and typecheck passed.
 | 检查项 | 状态 | 详情 |
 |--------|------|------|
 | Lint | ✅ 通过 | 代码规范检查通过 |
-| TypeCheck | ✅ 通过 | 类型检查通过 |
+| TypeCheck | ❌ 失败 | 存在类型错误 |
 
 ### Lint 输出
 
@@ -32,12 +32,45 @@ Code quality analysis completed. Lint and typecheck passed.
 > eslint
 
 
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\scripts\test-loop-engine.ts
+  38:9  warning  'pipelineResult' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\app\api\loop\route.ts
+  10:48  warning  'key' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\app\api\operator\panorama\route.ts
+  5:27  warning  'request' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\app\api\operator\runtime-control\route.ts
+  4:27  warning  'request' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\components\operator-console\governance-debt-panel.tsx
+  45:7  warning  'severityOrder' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\lib\execution-engine\engine.ts
+    7:3  warning  'ExecutionContext' is defined but never used  @typescript-eslint/no-unused-vars
+  359:5  warning  'output' is defined but never used            @typescript-eslint/no-unused-vars
+
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\lib\loop-engine\automation.ts
+  133:30  warning  'input' is defined but never used  @typescript-eslint/no-unused-vars
+  148:28  warning  'input' is defined but never used  @typescript-eslint/no-unused-vars
+  162:28  warning  'input' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\lib\loop-engine\engine.ts
+    9:3   warning  'LoopStatus' is defined but never used  @typescript-eslint/no-unused-vars
+  187:32  warning  'input' is defined but never used       @typescript-eslint/no-unused-vars
+  203:28  warning  'input' is defined but never used       @typescript-eslint/no-unused-vars
+  232:28  warning  'input' is defined but never used       @typescript-eslint/no-unused-vars
+
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\lib\loop-engine\feedback.ts
+   4:25  warning  'F
 ```
 
 ### TypeCheck 输出
 
 ```
-(无输出)
+src/app/page.tsx(207,33): error TS2503: Cannot find namespace 'JSX'.
+
 ```
 
 ## 建议变更

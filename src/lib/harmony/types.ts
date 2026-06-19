@@ -19,6 +19,15 @@ export type HarmonyTaskStatus =
   | 'failed'
   | 'cancelled'
 
+// 六阶段主生命周期
+export type HarmonyTaskLifecyclePhase =
+  | 'intake'      // 采访阶段：接收用户需求
+  | 'consensus'   // 工程共识阶段：需求澄清和确认
+  | 'planning'    // 计划阶段：制定执行计划
+  | 'execution'   // 执行阶段：执行任务
+  | 'review'      // 审查阶段：审查执行结果
+  | 'repair'      // 修复阶段：修复问题
+
 export const HARMONY_TASK_STATUSES: readonly HarmonyTaskStatus[] = [
   'draft',
   'pending_confirmation',
@@ -30,8 +39,43 @@ export const HARMONY_TASK_STATUSES: readonly HarmonyTaskStatus[] = [
   'cancelled',
 ]
 
+export const HARMONY_TASK_LIFECYCLE_PHASES: readonly HarmonyTaskLifecyclePhase[] = [
+  'intake',
+  'consensus',
+  'planning',
+  'execution',
+  'review',
+  'repair',
+]
+
 export function isHarmonyTaskStatus(status: string): status is HarmonyTaskStatus {
   return HARMONY_TASK_STATUSES.includes(status as HarmonyTaskStatus)
+}
+
+export function isHarmonyTaskLifecyclePhase(phase: string): phase is HarmonyTaskLifecyclePhase {
+  return HARMONY_TASK_LIFECYCLE_PHASES.includes(phase as HarmonyTaskLifecyclePhase)
+}
+
+// 根据任务状态推断生命周期阶段
+export function inferLifecyclePhaseFromStatus(status: HarmonyTaskStatus): HarmonyTaskLifecyclePhase {
+  switch (status) {
+    case 'draft':
+    case 'pending_confirmation':
+      return 'intake'
+    case 'queued':
+      return 'consensus'
+    case 'assigned':
+      return 'planning'
+    case 'blocked':
+      return 'execution'
+    case 'completed':
+      return 'review'
+    case 'failed':
+    case 'cancelled':
+      return 'repair'
+    default:
+      return 'intake'
+  }
 }
 
 export type HarmonyTaskEvent =

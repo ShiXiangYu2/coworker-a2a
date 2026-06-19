@@ -31,6 +31,7 @@ export class DeepSeekLLMProvider implements LLMProvider {
   private maxTokens: number
   private retryCount: number
   private retryDelayMs: number
+  private useAnthropicFormat: boolean
 
   constructor() {
     const apiKey = process.env.DEEPSEEK_API_KEY
@@ -49,7 +50,13 @@ export class DeepSeekLLMProvider implements LLMProvider {
     this.retryCount = parseInt(process.env.DEEPSEEK_RETRY_COUNT || '', 10) || DEFAULT_RETRY_COUNT
     this.retryDelayMs = parseInt(process.env.DEEPSEEK_RETRY_DELAY_MS || '', 10) || DEFAULT_RETRY_DELAY_MS
 
-    console.log(`[LLM] DeepSeek provider initialized: model=${this.model}, maxTokens=${this.maxTokens}, baseURL=${this.baseURL}`)
+    // 检测是否使用 Anthropic 格式
+    this.useAnthropicFormat = this.baseURL.includes('/anthropic')
+
+    // 仅在开发环境打印初始化信息
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[LLM] DeepSeek provider initialized: model=${this.model}`)
+    }
   }
 
   private async fetchWithRetry(
@@ -100,6 +107,101 @@ export class DeepSeekLLMProvider implements LLMProvider {
   }
 
   async *streamChat(
+    messages: ChatMessage[],
+    systemPrompt: string
+  ): AsyncGenerator<StreamEvent, void, unknown> {
+    if (this.useAnthropicFormat) {
+      yield* this.streamChatAnthropic(messages, systemPrompt)
+    } else {
+      yield* this.streamChatOpenAI(messages, systemPrompt)
+    }
+  }
+
+  private async *streamChatAnthropic(
+    messages: ChatMessage[],
+    systemPrompt: string
+  ): AsyncGenerator<StreamEvent, void, unknown> {
+    const apiMessages = this.buildAnthropicMessages(messages)
+
+    yield { type: 'start' }
+
+    try {
+      const requestBody: Record<string, unknown> = {
+        model: this.model,
+        messages: apiMessages,
+        max_tokens: this.maxTokens,
+        stream: true,
+      }
+
+      if (systemPrompt && systemPrompt.trim()) {
+        requestBody.system = systemPrompt
+      }
+
+      const response = await this.fetchWithRetry(
+        `${this.baseURL}/v1/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify(requestBody),
+        },
+        true
+      )
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`DeepSeek API error (${response.status}): ${errorText}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed || trimmed === 'data: [DONE]') continue
+            if (!trimmed.startsWith('data: ')) continue
+
+            try {
+              const json = JSON.parse(trimmed.slice(6))
+              // Anthropic 流式响应格式
+              if (json.type === 'content_block_delta' && json.delta?.text) {
+                yield { type: 'delta', content: json.delta.text }
+              }
+            } catch {
+              // 忽略解析错误的行
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
+
+      yield { type: 'done' }
+    } catch (error) {
+      const errorMessage = formatDeepSeekError(error)
+      yield { type: 'error', error: errorMessage }
+      yield { type: 'done' }
+    }
+  }
+
+  private async *streamChatOpenAI(
     messages: ChatMessage[],
     systemPrompt: string
   ): AsyncGenerator<StreamEvent, void, unknown> {
@@ -181,6 +283,96 @@ export class DeepSeekLLMProvider implements LLMProvider {
     systemPrompt: string,
     options?: { tools?: LLMToolDefinition[]; maxTokens?: number }
   ): Promise<LLMChatResult> {
+    if (this.useAnthropicFormat) {
+      return this.chatAnthropic(messages, systemPrompt, options)
+    }
+    return this.chatOpenAI(messages, systemPrompt, options)
+  }
+
+  private async chatAnthropic(
+    messages: ChatMessage[],
+    systemPrompt: string,
+    options?: { tools?: LLMToolDefinition[]; maxTokens?: number }
+  ): Promise<LLMChatResult> {
+    const apiMessages = this.buildAnthropicMessages(messages)
+
+    const requestBody: Record<string, unknown> = {
+      model: this.model,
+      messages: apiMessages,
+      max_tokens: options?.maxTokens ?? this.maxTokens,
+    }
+
+    if (systemPrompt && systemPrompt.trim()) {
+      requestBody.system = systemPrompt
+    }
+
+    // 转换工具格式为 Anthropic 格式
+    if (options?.tools && options.tools.length > 0) {
+      requestBody.tools = options.tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.input_schema,
+      }))
+    }
+
+    const response = await this.fetchWithRetry(
+      `${this.baseURL}/v1/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(requestBody),
+      }
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`DeepSeek API error (${response.status}): ${errorText}`)
+    }
+
+    const json = (await response.json()) as {
+      content: Array<{
+        type: string
+        text?: string
+        name?: string
+        input?: Record<string, unknown>
+      }>
+      stop_reason: string
+    }
+
+    // 仅在开发环境打印调试信息
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[DeepSeek Anthropic] stop_reason:', json.stop_reason)
+    }
+
+    let content = ''
+    let toolUse: LLMChatResult['toolUse'] | undefined
+
+    // 处理响应内容
+    for (const block of json.content || []) {
+      if (block.type === 'text') {
+        content += block.text || ''
+      } else if (block.type === 'tool_use') {
+        toolUse = {
+          name: block.name || '',
+          input: block.input || {},
+        }
+      }
+    }
+
+    const stopReason = this.mapAnthropicStopReason(json.stop_reason)
+
+    return { content, toolUse, stopReason }
+  }
+
+  private async chatOpenAI(
+    messages: ChatMessage[],
+    systemPrompt: string,
+    options?: { tools?: LLMToolDefinition[]; maxTokens?: number }
+  ): Promise<LLMChatResult> {
     const apiMessages = this.buildApiMessages(messages, systemPrompt)
 
     const requestBody: Record<string, unknown> = {
@@ -240,10 +432,10 @@ export class DeepSeekLLMProvider implements LLMProvider {
       throw new Error('Empty response from DeepSeek API')
     }
 
-    // Debug logging
-    console.log('[DeepSeek] finish_reason:', choice.finish_reason)
-    console.log('[DeepSeek] tool_calls:', JSON.stringify(choice.message.tool_calls))
-    console.log('[DeepSeek] content preview:', (choice.message.content || '').substring(0, 100))
+    // 仅在开发环境打印调试信息
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[DeepSeek OpenAI] finish_reason:', choice.finish_reason)
+    }
 
     let content = ''
     let toolUse: LLMChatResult['toolUse'] | undefined
@@ -291,7 +483,23 @@ export class DeepSeekLLMProvider implements LLMProvider {
   }
 
   /**
-   * 映射 finish_reason 到内部格式
+   * 构建 Anthropic 格式的 messages
+   */
+  private buildAnthropicMessages(messages: ChatMessage[]): Array<{ role: string; content: string }> {
+    const apiMessages: Array<{ role: string; content: string }> = []
+
+    for (const msg of messages) {
+      if (msg.role === 'system') continue
+      // Anthropic 只支持 user 和 assistant 角色
+      const role = msg.role === 'assistant' ? 'assistant' : 'user'
+      apiMessages.push({ role, content: msg.content })
+    }
+
+    return apiMessages
+  }
+
+  /**
+   * 映射 OpenAI finish_reason 到内部格式
    */
   private mapFinishReason(reason: string): LLMChatResult['stopReason'] {
     switch (reason) {
@@ -300,6 +508,22 @@ export class DeepSeekLLMProvider implements LLMProvider {
       case 'length':
         return 'max_tokens'
       case 'tool_calls':
+        return 'tool_use'
+      default:
+        return 'end_turn'
+    }
+  }
+
+  /**
+   * 映射 Anthropic stop_reason 到内部格式
+   */
+  private mapAnthropicStopReason(reason: string): LLMChatResult['stopReason'] {
+    switch (reason) {
+      case 'end_turn':
+        return 'end_turn'
+      case 'max_tokens':
+        return 'max_tokens'
+      case 'tool_use':
         return 'tool_use'
       default:
         return 'end_turn'
