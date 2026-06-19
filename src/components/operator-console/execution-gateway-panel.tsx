@@ -8,10 +8,13 @@ interface IntentRecord {
   intentTitle: string
   intentSummary: string
   status: string
+  correlationId?: string
+  sourceTaskId?: string
   requestedActionType: string
   requestedActionSummary: string
   riskSummary: string
   departmentProfileId?: string
+  createdBy?: string
   createdAt: string
 }
 
@@ -353,6 +356,9 @@ export function ExecutionGatewayPanel() {
                           </div>
                           <RecordMeta>
                             {record.intentTitle} | View Execution Timeline | {new Date(record.createdAt).toLocaleDateString()}
+                          </RecordMeta>
+                          <RecordMeta>
+                            Source: {record.sourceTaskId ?? 'manual'} | Correlation: {record.correlationId ?? 'unknown'} | Created by: {record.createdBy ?? 'operator'}
                           </RecordMeta>
                         </div>
                         <span className="text-xs text-slate-700">View Execution Audit</span>

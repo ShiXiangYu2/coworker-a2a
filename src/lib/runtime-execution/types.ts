@@ -95,6 +95,27 @@ export interface RuntimeExecutionScope {
   expiresAt: string
 }
 
+export interface ApprovedRuntimeExecutionPlanInput {
+  taskId: string
+  agentRunId: string
+  executionPlanRecordId: string
+  executionApprovalRecordId: string
+  approvedBy: RuntimeApprovedBy
+  issuedBy: RuntimeIssuedBy
+  approvalStatus: 'approved'
+  connectorId: RuntimeExecutionConnectorId
+  actionType: RuntimeExecutionActionType
+  riskLevel: RuntimeExecutionRiskLevel
+  requiresHumanApproval: true
+  idempotencyKey: string
+  correlationId?: string
+  timeoutMs?: number
+  maxAttempts?: number
+  summary: string
+  payload: StructuredRuntimeExecutionPlanPayload
+  scope: RuntimeExecutionScope
+}
+
 export interface RuntimeExecutionBaseRecord {
   id: string
   targetSprint: RuntimeExecutionTargetSprint

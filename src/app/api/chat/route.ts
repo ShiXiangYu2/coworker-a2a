@@ -199,6 +199,8 @@ export async function POST(request: NextRequest) {
                 blockedToolRequests: result.blockedToolRequests,
                 requiresApproval: result.requiresApproval,
                 proposedActionSummary: result.proposedActionSummary,
+                executionIntentRecordId: result.executionIntentRecordId,
+                executionPlanRecordId: result.executionPlanRecordId,
               })
 
               // Sprint 16: 发送交付物事件并保存到数据库
@@ -295,6 +297,8 @@ export async function POST(request: NextRequest) {
               blockedToolRequests: result.blockedToolRequests,
               requiresApproval: result.requiresApproval,
               proposedActionSummary: result.proposedActionSummary,
+              executionIntentRecordId: result.executionIntentRecordId,
+              executionPlanRecordId: result.executionPlanRecordId,
             })
 
             // 发送交付物

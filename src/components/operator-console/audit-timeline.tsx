@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { EmptyState, LoadingState, PanelShell, StatusBadge } from './ui'
+import { EmptyState, ErrorState, LoadingState, PanelShell, RefreshButton, StatusBadge } from './ui'
 
 interface AuditEvent {
   id: string
@@ -18,18 +18,23 @@ interface AuditEvent {
 export function AuditTimeline() {
   const [events, setEvents] = useState<AuditEvent[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function fetchEvents() {
+    setError(null)
     try {
       const res = await fetch('/api/audit/events?limit=30')
-      if (res.ok) {
-        const data = await res.json()
-        setEvents(data.data ?? [])
+      if (!res.ok) {
+        throw new Error('读取审计事件失败')
       }
+      const data = await res.json()
+      setEvents(data.data ?? [])
     } catch {
-      // Audit is best-effort in the local console.
+      setError('读取审计事件失败，请稍后重试。')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -48,7 +53,34 @@ export function AuditTimeline() {
     <PanelShell
       title="审计时间线"
       description={`${events.length} 条最近审计事件。这里是 audit-only 视图，不触发恢复、重试、回放或继续执行。`}
+      action={
+        <RefreshButton
+          disabled={refreshing}
+          onClick={() => {
+            setRefreshing(true)
+            void fetchEvents()
+          }}
+        >
+          {refreshing ? '刷新中...' : '刷新'}
+        </RefreshButton>
+      }
     >
+      {error && (
+        <ErrorState
+          message={error}
+          action={
+            <RefreshButton
+              disabled={refreshing}
+              onClick={() => {
+                setRefreshing(true)
+                void fetchEvents()
+              }}
+            >
+              重试
+            </RefreshButton>
+          }
+        />
+      )}
       <div className="max-h-96 overflow-y-auto">
         {events.length === 0 ? (
           <EmptyState title="暂无审计事件" description="本地任务、review record 或治理 API 产生事件后会出现在这里。" />

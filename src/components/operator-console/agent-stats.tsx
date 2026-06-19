@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { EmptyState, LoadingState, PanelShell, StatusBadge } from './ui'
+import { EmptyState, ErrorState, LoadingState, PanelShell, RefreshButton, StatusBadge } from './ui'
 
 interface AgentRun {
   id: string
@@ -34,18 +34,23 @@ const agentLabels: Record<string, string> = {
 export function AgentStats() {
   const [runs, setRuns] = useState<AgentRun[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function fetchRuns() {
+    setError(null)
     try {
       const res = await fetch('/api/audit/agent-runs?limit=100')
-      if (res.ok) {
-        const data = await res.json()
-        setRuns(data.data ?? [])
+      if (!res.ok) {
+        throw new Error('读取 Agent 分析记录失败')
       }
+      const data = await res.json()
+      setRuns(data.data ?? [])
     } catch {
-      // Keep the panel available even when audit data is empty.
+      setError('读取 Agent 分析记录失败，请稍后重试。')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -85,7 +90,34 @@ export function AgentStats() {
     <PanelShell
       title="Agent 分析记录"
       description={`${runs.length} 条 AgentRun 审计记录。这里是统计视图，不会启动或继续 Agent。`}
+      action={
+        <RefreshButton
+          disabled={refreshing}
+          onClick={() => {
+            setRefreshing(true)
+            void fetchRuns()
+          }}
+        >
+          {refreshing ? '刷新中...' : '刷新'}
+        </RefreshButton>
+      }
     >
+      {error && (
+        <ErrorState
+          message={error}
+          action={
+            <RefreshButton
+              disabled={refreshing}
+              onClick={() => {
+                setRefreshing(true)
+                void fetchRuns()
+              }}
+            >
+              重试
+            </RefreshButton>
+          }
+        />
+      )}
       <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
         {Object.entries(stats)
           .sort(([, a], [, b]) => b.total - a.total)
@@ -98,10 +130,10 @@ export function AgentStats() {
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <Metric label="Total" value={String(item.total)} />
-                <Metric label="Success Rate" value={item.total > 0 ? `${((item.completed / item.total) * 100).toFixed(0)}%` : '-'} />
-                <Metric label="Failed" value={String(item.failed)} />
-                <Metric label="Avg Duration" value={item.avgDurationMs > 0 ? `${(item.avgDurationMs / 1000).toFixed(1)}s` : '-'} />
+                <Metric label="总次数" value={String(item.total)} />
+                <Metric label="成功率" value={item.total > 0 ? `${((item.completed / item.total) * 100).toFixed(0)}%` : '-'} />
+                <Metric label="失败数" value={String(item.failed)} />
+                <Metric label="平均耗时" value={item.avgDurationMs > 0 ? `${(item.avgDurationMs / 1000).toFixed(1)} 秒` : '-'} />
               </div>
               <div className="mt-3">
                 <StatusBadge status={item.failed > 0 ? 'review' : 'approved_record'} />

@@ -152,6 +152,12 @@ async function cleanupTestData() {
     await prisma.harmonyAuditEvent.deleteMany({
       where: { correlationId: { in: correlationIds } },
     })
+    await prisma.executionPlanRecord.deleteMany({
+      where: { correlationId: { in: correlationIds } },
+    })
+    await prisma.executionIntentRecord.deleteMany({
+      where: { correlationId: { in: correlationIds } },
+    })
     await prisma.agentTaskRunRecord.deleteMany({
       where: { correlationId: { in: correlationIds } },
     })
@@ -289,14 +295,30 @@ describe('ChatHub agent task run records', () => {
       where: { correlationId },
       orderBy: { createdAt: 'asc' },
     })
+    const intents = await prisma.executionIntentRecord.findMany({
+      where: { correlationId },
+    })
+    const plans = await prisma.executionPlanRecord.findMany({
+      where: { correlationId },
+    })
 
     expect(response.status).toBe(200)
     expect(executeToolCall).not.toHaveBeenCalled()
     expect(text).toContain('"type":"agent_result"')
     expect(text).toContain('"requiresApproval":true')
     expect(text).toContain('"blockedToolRequests"')
+    expect(text).toContain('"executionIntentRecordId":"')
+    expect(text).toContain('"executionPlanRecordId":"')
     expect(record?.status).toBe('completed')
     expect(record?.outputJson).toContain('"blockedToolRequests"')
+    expect(record?.outputJson).toContain('"executionIntentRecordId"')
+    expect(intents).toHaveLength(1)
+    expect(intents[0]?.status).toBe('draft')
+    expect(intents[0]?.requestedActionType).toBe('agent_tool_request_proposal')
+    expect(intents[0]?.requestedActionSummary).not.toContain('write file')
+    expect(plans).toHaveLength(1)
+    expect(plans[0]?.status).toBe('draft')
+    expect(plans[0]?.nonExecutablePlanOnly).toBe(true)
     expect(auditEvents.map((event) => event.eventType)).toEqual(
       expect.arrayContaining(['agent_task.started', 'agent_task.tool_request_blocked', 'agent_task.completed'])
     )
@@ -318,6 +340,12 @@ describe('ChatHub agent task run records', () => {
       where: { correlationId },
       orderBy: { createdAt: 'asc' },
     })
+    const intents = await prisma.executionIntentRecord.findMany({
+      where: { correlationId },
+    })
+    const plans = await prisma.executionPlanRecord.findMany({
+      where: { correlationId },
+    })
 
     expect(response.status).toBe(200)
     expect(executeToolCall).not.toHaveBeenCalled()
@@ -325,6 +353,10 @@ describe('ChatHub agent task run records', () => {
     expect(text).toContain('"requiresApproval":true')
     expect(records).toHaveLength(2)
     expect(records.every((record) => record.status === 'completed')).toBe(true)
+    expect(intents).toHaveLength(2)
+    expect(plans).toHaveLength(2)
+    expect(intents.every((intent) => intent.status === 'draft')).toBe(true)
+    expect(plans.every((plan) => plan.nonExecutablePlanOnly)).toBe(true)
     expect(auditEvents.filter((event) => event.eventType === 'agent_task.tool_request_blocked')).toHaveLength(2)
   })
 })

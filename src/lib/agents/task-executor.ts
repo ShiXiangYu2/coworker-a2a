@@ -33,6 +33,8 @@ export interface SubTaskResult {
   blockedToolRequests?: BlockedToolRequest[]
   requiresApproval?: boolean
   proposedActionSummary?: string
+  executionIntentRecordId?: string
+  executionPlanRecordId?: string
 }
 
 export interface BlockedToolRequest {

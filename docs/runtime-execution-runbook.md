@@ -14,6 +14,8 @@ For the end-to-end Operator panel handoff flow, see `docs/runtime-panel-smoke-fl
 
 For the phase acceptance gate, see `docs/sprint-22-acceptance-checklist.md`.
 
+For the Sprint 22 phase freeze and handoff summary, see `specs/sprint-22-controlled-runtime-execution/closeout.md`.
+
 ## Safety Boundary
 
 Runtime permission exists only through `RuntimeExecutionToken`.

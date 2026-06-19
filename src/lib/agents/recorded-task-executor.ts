@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { createToolRequestIntentAndPlan } from '@/lib/execution-gateway/tool-request-intent'
 import { executeAgentTask, type SubTaskResult } from './task-executor'
 
 export type RecordedSubTaskResult = SubTaskResult & {
@@ -62,6 +63,24 @@ export async function executeRecordedAgentTask(
     )
     const completedAt = new Date()
     const status = result.status === 'completed' ? 'completed' : 'failed'
+    const toolRequestIntent = result.blockedToolRequests?.length
+      ? await createToolRequestIntentAndPlan({
+          correlationId: input.correlationId,
+          agentTaskRunRecordId: record.id,
+          agentId: input.agentId,
+          taskId: input.taskId,
+          blockedToolRequests: result.blockedToolRequests,
+          proposedActionSummary: result.proposedActionSummary,
+        })
+      : null
+    if (toolRequestIntent) {
+      result.executionIntentRecordId = toolRequestIntent.executionIntentRecordId
+      result.executionPlanRecordId = toolRequestIntent.executionPlanRecordId
+      result.proposedActionSummary = [
+        result.proposedActionSummary,
+        `Draft governance records: ${toolRequestIntent.executionIntentRecordId}, ${toolRequestIntent.executionPlanRecordId}.`,
+      ].filter(Boolean).join(' ')
+    }
     const errorJson = status === 'failed'
       ? JSON.stringify({
           message: result.error ?? result.summary,
@@ -93,6 +112,8 @@ export async function executeRecordedAgentTask(
           taskType: input.taskType,
           blockedToolRequests: result.blockedToolRequests,
           proposedActionSummary: result.proposedActionSummary ?? null,
+          executionIntentRecordId: toolRequestIntent.executionIntentRecordId,
+          executionPlanRecordId: toolRequestIntent.executionPlanRecordId,
         },
       })
     }
@@ -114,6 +135,8 @@ export async function executeRecordedAgentTask(
         blockedToolRequests: result.blockedToolRequests ?? [],
         requiresApproval: result.requiresApproval ?? false,
         proposedActionSummary: result.proposedActionSummary ?? null,
+        executionIntentRecordId: result.executionIntentRecordId ?? null,
+        executionPlanRecordId: result.executionPlanRecordId ?? null,
       },
     })
 

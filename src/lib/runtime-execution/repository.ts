@@ -153,7 +153,7 @@ async function assertRuntimeDispatchJobNotAlreadyCompleted(args: {
   }
 }
 
-async function assertRuntimeDispatchJobIdempotencyAvailable(idempotencyKey: string) {
+export async function assertRuntimeDispatchJobIdempotencyAvailable(idempotencyKey: string) {
   const existingLiveJob = await prisma.runtimeDispatchJob.findFirst({
     where: {
       idempotencyKey,
