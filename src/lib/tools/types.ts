@@ -32,6 +32,8 @@ export interface ToolDefinition {
   isReadOnly: boolean
   isDestructive: boolean
   isOpenWorld: boolean
+  /** 核心工具始终加载，非核心按需发现（对齐 claude-code CORE_TOOLS 模式） */
+  isCore?: boolean
   requiresHumanConfirmation: boolean
   allowedAgentIds?: AgentId[]
   allowedTaskTypes?: string[]

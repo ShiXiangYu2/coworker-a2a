@@ -163,6 +163,91 @@ function buildAgentResultFromToolUse(
 }
 
 /**
+ * LLM-driven Agent Result producer — 多轮对话版本
+ *
+ * 使用 runTurnLoop 进行多轮 LLM 交互，支持工具调用链。
+ * 适用于需要多步推理的复杂任务。
+ *
+ * 与 produceLLMAgentResult 的区别：
+ *   - produceLLMAgentResult：单轮调用，强制 produce_analysis 输出
+ *   - 本函数：多轮循环，LLM 可以调用任意工具后最终产出分析
+ */
+export async function produceLLMAgentResultWithTurnLoop(
+  task: HarmonyTask,
+  context?: unknown,
+): Promise<AgentResult> {
+  void context
+  const agentId = task.targetAgentId
+
+  if (!agentId || agentId === 'kelvin') {
+    return produceDeterministicAgentResult(task)
+  }
+
+  try {
+    const { runTurnLoop } = await import('./turn-loop')
+    const { resolveAgentContext } = await import('./context-resolver')
+
+    // 注入多 Agent 协作上下文
+    let systemPromptOverride: string | undefined
+    const resolvedContext = await resolveAgentContext(
+      agentId,
+      task.id,
+      task.conversationId,
+    )
+    if (resolvedContext) {
+      // 通过 system prompt 注入上下文（turn-loop 内部也会构建 prompt，这里做补充）
+      systemPromptOverride = undefined // 让 turn-loop 自己构建
+      console.log(
+        `[LLM-Producer/TurnLoop] Context available: ${resolvedContext.stats.completedResults} results, ${resolvedContext.stats.a2aMessages} messages`,
+      )
+    }
+
+    const userMessage = [
+      `## Task`,
+      `Title: ${task.title}`,
+      `Description: ${task.description}`,
+      `Type: ${task.type}`,
+      `Route Reason: ${task.reason}`,
+      task.targetAgentId ? `Assigned Agent: ${task.targetAgentId}` : '',
+      '',
+      'Analyze this task. You may use tools if available, then produce your analysis.',
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    const turnResult = await runTurnLoop(
+      agentId as Exclude<AgentId, 'kelvin'>,
+      task.id,
+      [{ role: 'user', content: userMessage }],
+      {
+        maxTurns: 5,
+        timeoutMs: 60_000,
+        tools: [], // 使用 Agent 核心工具
+      },
+      undefined, // 使用默认 noop 执行器
+      systemPromptOverride,
+    )
+
+    // 从 turn-loop 结果中提取 AgentResult
+    if (turnResult.success && turnResult.finalContent) {
+      // 尝试从最终内容中解析 JSON 结果
+      const parsed = tryParseAgentResult(turnResult.finalContent)
+      if (parsed) {
+        parsed.contextSnapshot = resolvedContext?.stats
+        return parsed
+      }
+    }
+
+    // 如果 turn-loop 没有产出有效结果，回退到单轮模式
+    console.log('[LLM-Producer/TurnLoop] No valid result from turn loop, falling back to single-turn')
+    return produceLLMAgentResult(task, context)
+  } catch (error) {
+    console.log('[LLM-Producer/TurnLoop] Error, falling back to single-turn:', error)
+    return produceLLMAgentResult(task, context)
+  }
+}
+
+/**
  * LLM-driven Agent Result producer.
  * Uses Claude Sonnet with Tool Use for structured output.
  * Falls back to deterministic producer on any error.
@@ -242,4 +327,71 @@ export async function produceLLMAgentResult(
     console.log('[LLM-Producer] LLM error, falling back to deterministic:', error)
     return produceDeterministicAgentResult(task)
   }
+}
+
+// ─── 辅助函数 ──────────────────────────────────────────────────────
+
+/**
+ * 尝试从 LLM 输出文本中解析 AgentResult JSON
+ *
+ * LLM 可能输出包含 JSON 的 Markdown 文本，这里尝试提取并解析
+ */
+function tryParseAgentResult(text: string): AgentResult | null {
+  if (!text) return null
+
+  // 尝试直接解析
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>
+    if (isValidAgentResultShape(parsed)) {
+      return parsed as unknown as AgentResult
+    }
+  } catch {
+    // 不是纯 JSON，继续尝试从 Markdown 中提取
+  }
+
+  // 尝试从 ```json ... ``` 代码块中提取
+  const jsonBlockMatch = text.match(/```json\s*\n?([\s\S]*?)\n?\s*```/)
+  if (jsonBlockMatch) {
+    try {
+      const parsed = JSON.parse(jsonBlockMatch[1]) as Record<string, unknown>
+      if (isValidAgentResultShape(parsed)) {
+        return parsed as unknown as AgentResult
+      }
+    } catch {
+      // 解析失败
+    }
+  }
+
+  // 尝试从 { ... } 中提取
+  const objectMatch = text.match(/\{[\s\S]*"status"[\s\S]*\}/)
+  if (objectMatch) {
+    try {
+      const parsed = JSON.parse(objectMatch[0]) as Record<string, unknown>
+      if (isValidAgentResultShape(parsed)) {
+        return parsed as unknown as AgentResult
+      }
+    } catch {
+      // 解析失败
+    }
+  }
+
+  return null
+}
+
+/**
+ * 检查对象是否具有 AgentResult 的基本形状
+ */
+function isValidAgentResultShape(obj: Record<string, unknown>): boolean {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    typeof obj.status === 'string' &&
+    typeof obj.confidence === 'number' &&
+    typeof obj.summary === 'string' &&
+    Array.isArray(obj.findings) &&
+    Array.isArray(obj.proposedChanges) &&
+    typeof obj.next === 'object' &&
+    obj.next !== null &&
+    typeof (obj.next as Record<string, unknown>).recommendedAction === 'string'
+  )
 }

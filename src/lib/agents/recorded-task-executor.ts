@@ -112,8 +112,8 @@ export async function executeRecordedAgentTask(
           taskType: input.taskType,
           blockedToolRequests: result.blockedToolRequests,
           proposedActionSummary: result.proposedActionSummary ?? null,
-          executionIntentRecordId: toolRequestIntent.executionIntentRecordId,
-          executionPlanRecordId: toolRequestIntent.executionPlanRecordId,
+          executionIntentRecordId: result.executionIntentRecordId ?? null,
+          executionPlanRecordId: result.executionPlanRecordId ?? null,
         },
       })
     }

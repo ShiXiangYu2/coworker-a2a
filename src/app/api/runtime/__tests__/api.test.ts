@@ -14,6 +14,7 @@ import {
   getRuntimeExecutionReceiptByJobId,
   getRuntimeExecutionTokenById,
   heartbeatRuntimeDispatchJob,
+  issueRuntimeExecutionFromApprovedPlan,
   listRuntimeDispatchAttempts,
   listRuntimeDispatchJobs,
   listRuntimeExecutionTokens,
@@ -25,6 +26,7 @@ import {
 import { POST as createToken, GET as listTokens } from '../tokens/route'
 import { GET as getToken } from '../tokens/[id]/route'
 import { POST as createJob, GET as listJobs } from '../jobs/route'
+import { POST as createApprovedPlanJob } from '../jobs/from-approved-plan/route'
 import { POST as seedSampleJob } from '../seed-sample-job/route'
 import { GET as getJob } from '../jobs/[id]/route'
 import { GET as getJobTimeline } from '../jobs/[id]/timeline/route'
@@ -76,6 +78,49 @@ vi.mock('@/lib/runtime-execution', async () => {
       auditEvent: { id: 'audit-job-1' },
       safetyNote,
     })),
+    issueRuntimeExecutionFromApprovedPlan: vi.fn(async (input) => {
+      if (input.idempotencyKey === 'duplicate-idem') {
+        throw new RuntimeExecutionApiError('Runtime dispatch job idempotencyKey already has a live or succeeded job.', 409)
+      }
+      if (input.connectorId !== 'obsidian_local') {
+        throw new RuntimeExecutionApiError('Runtime approved-plan issuance only allows connectorId "obsidian_local".', 409)
+      }
+      if (input.actionType !== 'write_local_markdown_draft') {
+        throw new RuntimeExecutionApiError('Runtime approved-plan issuance only allows actionType "write_local_markdown_draft".', 409)
+      }
+      if (input.riskLevel !== 'low') {
+        throw new RuntimeExecutionApiError('Runtime approved-plan issuance only allows low risk plans.', 409)
+      }
+      if (input.approvalStatus !== 'approved' || input.requiresHumanApproval !== true) {
+        throw new RuntimeExecutionApiError('Runtime approved-plan issuance requires a human-approved plan.', 409)
+      }
+      if (input.scope.allowedTargetDirectoryLabel !== 'Inbox/AI Drafts') {
+        throw new RuntimeExecutionApiError('Runtime approved-plan scope must be limited to Inbox/AI Drafts.', 409)
+      }
+      return {
+        token: {
+          id: 'token-issued-1',
+          status: 'active',
+          taskId: input.taskId,
+          connectorId: input.connectorId,
+          actionType: input.actionType,
+          idempotencyKey: input.idempotencyKey,
+          correlationId: input.correlationId ?? 'corr-issued-1',
+        },
+        job: {
+          id: 'job-issued-1',
+          status: 'queued',
+          taskId: input.taskId,
+          connectorId: input.connectorId,
+          actionType: input.actionType,
+          idempotencyKey: input.idempotencyKey,
+          runtimeTokenId: 'token-issued-1',
+          correlationId: input.correlationId ?? 'corr-issued-1',
+        },
+        auditEvents: [{ id: 'audit-issued-1' }],
+        safetyNote,
+      }
+    }),
     listRuntimeExecutionTokens: vi.fn(async () => [{ id: 'token-1', status: 'draft' }]),
     listRuntimeDispatchJobs: vi.fn(async () => [{ id: 'job-1', status: 'queued', taskId: 'task-1' }]),
     listRuntimeDispatchAttempts: vi.fn(async (jobId) => [
@@ -526,6 +571,119 @@ describe('Sprint 22 Runtime API', () => {
     expect(response.status).toBe(400)
     expect(body.error.message).toContain('taskId is required')
     expect(seedRuntimeSampleJob).not.toHaveBeenCalled()
+  })
+
+  it('issues an active runtime token and queued job from an approved low-risk plan input', async () => {
+    const response = await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', {
+      taskId: 'task-1',
+      agentRunId: 'agent-run-1',
+      executionPlanRecordId: 'execution-plan-1',
+      executionApprovalRecordId: 'execution-approval-1',
+      approvedBy: 'kelvin',
+      issuedBy: 'operator',
+      approvalStatus: 'approved',
+      connectorId: 'obsidian_local',
+      actionType: 'write_local_markdown_draft',
+      riskLevel: 'low',
+      requiresHumanApproval: true,
+      idempotencyKey: 'idem-issued-1',
+      correlationId: 'corr-issued-1',
+      summary: 'Issue one approved Obsidian draft write only.',
+      payload: plan.payload,
+      scope: {
+        ...scope,
+        idempotencyKey: 'idem-issued-1',
+      },
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(body.token.status).toBe('active')
+    expect(body.job.status).toBe('queued')
+    expect(body.token.connectorId).toBe(body.job.connectorId)
+    expect(body.token.actionType).toBe(body.job.actionType)
+    expect(body.token.taskId).toBe(body.job.taskId)
+    expect(body.token.idempotencyKey).toBe(body.job.idempotencyKey)
+    expect(body.token.correlationId).toBe(body.job.correlationId)
+    expect(body.safetyNote).toContain('Sprint 22')
+    expect(issueRuntimeExecutionFromApprovedPlan).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: 'task-1',
+      connectorId: 'obsidian_local',
+      actionType: 'write_local_markdown_draft',
+      requiresHumanApproval: true,
+      scope: expect.objectContaining({
+        allowedTargetDirectoryLabel: 'Inbox/AI Drafts',
+      }),
+    }))
+    expect(runRuntimeDispatchJobOnce).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid approved-plan issuance input without execution', async () => {
+    const missingTask = await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', {
+      approvedBy: 'kelvin',
+    }))
+    expect(missingTask.status).toBe(400)
+
+    const baseBody = {
+      taskId: 'task-1',
+      agentRunId: 'agent-run-1',
+      executionPlanRecordId: 'execution-plan-1',
+      executionApprovalRecordId: 'execution-approval-1',
+      approvedBy: 'kelvin',
+      approvalStatus: 'approved',
+      connectorId: 'obsidian_local',
+      actionType: 'write_local_markdown_draft',
+      riskLevel: 'low',
+      requiresHumanApproval: true,
+      idempotencyKey: 'duplicate-idem',
+      summary: 'Issue one approved Obsidian draft write only.',
+      payload: plan.payload,
+      scope: {
+        ...scope,
+        idempotencyKey: 'duplicate-idem',
+      },
+    }
+
+    expect((await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', baseBody))).status).toBe(409)
+    expect((await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', {
+      ...baseBody,
+      connectorId: 'github',
+      idempotencyKey: 'idem-invalid-connector',
+      scope: { ...scope, connectorId: 'github', idempotencyKey: 'idem-invalid-connector' },
+    }))).status).toBe(409)
+    expect((await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', {
+      ...baseBody,
+      actionType: 'create_pr',
+      idempotencyKey: 'idem-invalid-action',
+      scope: { ...scope, actionType: 'create_pr', idempotencyKey: 'idem-invalid-action' },
+    }))).status).toBe(409)
+    expect((await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', {
+      ...baseBody,
+      riskLevel: 'medium',
+      idempotencyKey: 'idem-non-low-risk',
+      scope: { ...scope, idempotencyKey: 'idem-non-low-risk' },
+    }))).status).toBe(409)
+    expect((await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', {
+      ...baseBody,
+      idempotencyKey: 'idem-invalid-scope',
+      scope: { ...scope, allowedTargetDirectoryLabel: 'Elsewhere', idempotencyKey: 'idem-invalid-scope' },
+    }))).status).toBe(409)
+    expect((await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', {
+      ...baseBody,
+      approvalStatus: 'pending',
+      idempotencyKey: 'idem-not-approved',
+      scope: { ...scope, idempotencyKey: 'idem-not-approved' },
+    }))).status).toBe(409)
+    expect((await createApprovedPlanJob(jsonRequest('http://localhost/api/runtime/jobs/from-approved-plan', {
+      ...baseBody,
+      requiresHumanApproval: false,
+      idempotencyKey: 'idem-no-human-approval',
+      scope: { ...scope, idempotencyKey: 'idem-no-human-approval' },
+    }))).status).toBe(409)
+
+    expect(runRuntimeDispatchJobOnce).not.toHaveBeenCalled()
+    expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
   })
 
   it('queries token/job by id and task-linked jobs', async () => {

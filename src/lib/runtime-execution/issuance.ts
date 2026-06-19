@@ -80,6 +80,8 @@ function assertApprovedPlanInput(input: ApprovedRuntimeExecutionPlanInput): void
 export async function issueRuntimeExecutionFromApprovedPlan(
   input: ApprovedRuntimeExecutionPlanInput
 ): Promise<IssueRuntimeExecutionFromApprovedPlanResult> {
+  const approvedBy = approvedByValue(input.approvedBy)
+  const issuedBy = issuedByValue(input.issuedBy)
   assertApprovedPlanInput(input)
 
   const plan: StructuredRuntimeExecutionPlan = {
@@ -108,8 +110,8 @@ export async function issueRuntimeExecutionFromApprovedPlan(
     executionApprovalRecordId: input.executionApprovalRecordId,
     plan,
     scope: input.scope,
-    issuedBy: input.issuedBy,
-    approvedBy: input.approvedBy,
+    issuedBy,
+    approvedBy,
     correlationId: input.correlationId,
     expiresAt: input.scope.expiresAt,
     idempotencyKey: input.idempotencyKey,

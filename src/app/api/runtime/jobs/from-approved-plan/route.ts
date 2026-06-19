@@ -17,10 +17,10 @@ function requiredObject(
 }
 
 function requiredBooleanTrue(value: unknown, name: string): true {
-  if (value !== true) {
-    throw new Error(`${name} must be true.`)
+  if (typeof value !== 'boolean') {
+    throw new Error(`${name} is required and must be a boolean.`)
   }
-  return true
+  return value as true
 }
 
 export async function POST(request: Request) {

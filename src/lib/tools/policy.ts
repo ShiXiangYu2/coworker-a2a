@@ -1,4 +1,4 @@
-import { normalizeSandboxTargetPath, validateSandboxFileWriteInput } from '../sandbox/file-write-sandbox'
+import { normalizeSandboxTargetPath, validateSandboxFileWriteInput } from '@/lib/sandbox/file-write-sandbox'
 import { findToolByIdOrName, getPermissionProfile } from './registry'
 import type {
   ToolCall,

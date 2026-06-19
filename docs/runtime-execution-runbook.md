@@ -136,6 +136,51 @@ Content-Type: application/json
 
 This API is for development and verification only. It creates one active token and one queued job, but it does not claim, start, complete, run a runner, or write to Obsidian.
 
+## Issue From Approved Plan
+
+Use the approved-plan issuance API when a low-risk execution plan has already passed human approval and should become one runtime token plus one queued job:
+
+```http
+POST /api/runtime/jobs/from-approved-plan
+Content-Type: application/json
+
+{
+  "taskId": "task-123",
+  "agentRunId": "agent-run-123",
+  "executionPlanRecordId": "execution-plan-123",
+  "executionApprovalRecordId": "execution-approval-123",
+  "approvedBy": "kelvin",
+  "issuedBy": "operator",
+  "approvalStatus": "approved",
+  "connectorId": "obsidian_local",
+  "actionType": "write_local_markdown_draft",
+  "riskLevel": "low",
+  "requiresHumanApproval": true,
+  "idempotencyKey": "runtime:task-123:obsidian-draft",
+  "summary": "Issue one approved Obsidian Markdown draft write.",
+  "payload": {
+    "draftTitle": "Approved draft",
+    "filename": "approved-draft.md",
+    "content": "# Approved draft",
+    "targetDirectoryLabel": "Inbox/AI Drafts"
+  },
+  "scope": {
+    "connectorId": "obsidian_local",
+    "actionType": "write_local_markdown_draft",
+    "allowedVaultRoot": "D:\\AI-Vault",
+    "allowedTargetDirectoryLabel": "Inbox/AI Drafts",
+    "allowedFilename": "approved-draft.md",
+    "taskId": "task-123",
+    "agentRunId": "agent-run-123",
+    "executionPlanRecordId": "execution-plan-123",
+    "idempotencyKey": "runtime:task-123:obsidian-draft",
+    "expiresAt": "2026-06-20T00:00:00.000Z"
+  }
+}
+```
+
+This endpoint only issues records. It creates one `active` `RuntimeExecutionToken` and one `queued` `RuntimeDispatchJob`; it does not claim, start, complete, run a runner, call Obsidian, or execute any connector.
+
 ## Dry-Run Verification Helper
 
 Use this helper when you only want to verify the controlled lifecycle and audit records:
