@@ -17,6 +17,17 @@ vi.mock('../repository', () => ({
     ]),
 }))
 
+vi.mock('@/lib/harmony/repository', () => ({
+  getTaskBundle: vi.fn(async (id: string) => id === 'empty-task'
+    ? null
+    : {
+      task: {
+        id,
+        status: 'queued',
+      },
+    }),
+}))
+
 vi.mock('../timeline', () => ({
   getRuntimeDispatchJobTimeline: vi.fn(async (jobId) => {
     const statusByJobId: Record<string, string> = {
@@ -62,6 +73,7 @@ vi.mock('../timeline', () => ({
 
 import { listRuntimeDispatchJobs } from '../repository'
 import { getRuntimeDispatchJobTimeline } from '../timeline'
+import { getTaskBundle } from '@/lib/harmony/repository'
 
 describe('Sprint 22 task runtime execution summary', () => {
   beforeEach(() => {
@@ -71,10 +83,14 @@ describe('Sprint 22 task runtime execution summary', () => {
   it('aggregates task jobs into counts, receipt counts, and derived metadata', async () => {
     const result = await getTaskRuntimeExecutionSummary('task-1')
 
+    expect(getTaskBundle).toHaveBeenCalledWith('task-1')
     expect(listRuntimeDispatchJobs).toHaveBeenCalledWith({ taskId: 'task-1', limit: 100 })
     expect(getRuntimeDispatchJobTimeline).toHaveBeenCalledTimes(4)
     expect(getRuntimeDispatchJobTimeline).toHaveBeenCalledWith('job-queued')
     expect(result.jobs).toHaveLength(4)
+    expect(result.taskStatus).toBe('queued')
+    expect(result.hasWorkflowProposal).toBe(false)
+    expect(result.hasEvalOrReview).toBe(false)
     expect(result.counts).toEqual({
       total: 4,
       queued: 1,
@@ -100,6 +116,7 @@ describe('Sprint 22 task runtime execution summary', () => {
     const result = await getTaskRuntimeExecutionSummary('empty-task')
 
     expect(result.jobs).toEqual([])
+    expect(result.taskStatus).toBeNull()
     expect(result.counts.total).toBe(0)
     expect(result.receipts).toEqual({
       dryRunCount: 0,

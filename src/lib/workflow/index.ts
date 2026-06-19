@@ -16,5 +16,6 @@
 export * from './types'
 export * from './state-machine'
 export * from './validators'
+export * from './lifecycle'
 export * from './loop-state'
 export * from './loop-engine'

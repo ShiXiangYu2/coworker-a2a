@@ -3,6 +3,10 @@ import type {
   TaskRuntimeExecutionSummaryReadModel,
 } from './read-models'
 import { getTaskRuntimeExecutionSummary } from './task-summary'
+import {
+  deriveTaskLifecyclePhase,
+  type DerivedTaskLifecycle,
+} from '@/lib/workflow'
 
 export interface RuntimeOperatorStatusBands {
   live: RuntimeDispatchJobTimelineReadModel[]
@@ -20,6 +24,7 @@ export interface RuntimeOperatorHighlight {
 
 export interface RuntimeOperatorTaskViewModel {
   taskId: string
+  lifecycle: DerivedTaskLifecycle
   summary: TaskRuntimeExecutionSummaryReadModel
   latestJob: RuntimeDispatchJobTimelineReadModel | null
   latestReceipt: RuntimeDispatchJobTimelineReadModel['receipt']
@@ -55,6 +60,14 @@ export async function buildRuntimeOperatorTaskViewModel(taskId: string): Promise
 
   return {
     taskId: summary.taskId,
+    lifecycle: deriveTaskLifecyclePhase({
+      taskStatus: summary.taskStatus ?? undefined,
+      hasWorkflowProposal: summary.hasWorkflowProposal,
+      hasRuntimeJob: summary.counts.total > 0,
+      latestRuntimeStatus: latestJob?.job?.status ?? null,
+      hasEvalOrReview: summary.hasEvalOrReview,
+      hasBlockedOrFailedExecution: summary.counts.blocked > 0 || summary.counts.failed > 0,
+    }),
     summary,
     latestJob,
     latestReceipt: latestJob?.receipt ?? null,

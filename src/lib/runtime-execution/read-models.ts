@@ -49,6 +49,9 @@ export interface TaskRuntimeExecutionSummaryDerivedReadModel {
 
 export interface TaskRuntimeExecutionSummaryReadModel {
   taskId: string
+  taskStatus?: string | null
+  hasWorkflowProposal: boolean
+  hasEvalOrReview: boolean
   jobs: RuntimeDispatchJobTimelineReadModel[]
   counts: TaskRuntimeExecutionSummaryCountsReadModel
   receipts: TaskRuntimeExecutionSummaryReceiptsReadModel

@@ -22,6 +22,13 @@ export const sprint22FileWriteProfile: SandboxFileWriteProfile = {
   maxContentChars: 12000,
 }
 
+export const sprint23FileWriteProfile: SandboxFileWriteProfile = {
+  id: 'sandbox-file-write-controlled-sprint-23',
+  allowedRoot: 'tmp',
+  allowedExtensions: ['.md', '.json', '.txt', '.ts', '.js'],
+  maxContentChars: 50_000,
+}
+
 export function validateSandboxFileWriteInput(
   input: unknown,
   profile: SandboxFileWriteProfile = sprint22FileWriteProfile
@@ -42,10 +49,11 @@ export function validateSandboxFileWriteInput(
   if (content.length > profile.maxContentChars) {
     throw new SandboxFileWriteError('content exceeds sandbox maxContentChars.')
   }
-  if (format !== 'md' && format !== 'json' && format !== 'txt') {
-    throw new SandboxFileWriteError('format must be md, json, or txt.')
+  const allowedFormats = profile.allowedExtensions.map((ext) => ext.slice(1))
+  if (!allowedFormats.includes(format as string)) {
+    throw new SandboxFileWriteError(`format must be one of: ${allowedFormats.join(', ')}.`)
   }
-  return { targetPath, content, format }
+  return { targetPath, content, format: format as SandboxFileWriteInput['format'] }
 }
 
 export function normalizeSandboxTargetPath(
@@ -66,11 +74,11 @@ export function normalizeSandboxTargetPath(
   const normalizedTargetPath = path.resolve(projectRoot, targetPath)
   const relativePath = path.relative(allowedRootPath, normalizedTargetPath)
   if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    throw new SandboxFileWriteError('targetPath must stay inside deliverables/.')
+    throw new SandboxFileWriteError(`targetPath must stay inside ${profile.allowedRoot}/.`)
   }
   const extension = path.extname(normalizedTargetPath).toLowerCase() as SandboxAllowedExtension
   if (!profile.allowedExtensions.includes(extension)) {
-    throw new SandboxFileWriteError('targetPath extension must be .md, .json, or .txt.')
+    throw new SandboxFileWriteError(`targetPath extension must be one of: ${profile.allowedExtensions.join(', ')}.`)
   }
   return {
     outputPath: normalizedTargetPath,

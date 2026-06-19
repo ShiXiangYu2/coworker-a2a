@@ -1,8 +1,8 @@
-export type SandboxAllowedExtension = '.md' | '.json' | '.txt'
+export type SandboxAllowedExtension = '.md' | '.json' | '.txt' | '.ts' | '.js'
 
 export interface SandboxFileWriteProfile {
   id: string
-  allowedRoot: 'deliverables'
+  allowedRoot: 'deliverables' | 'tmp'
   allowedExtensions: SandboxAllowedExtension[]
   maxContentChars: number
 }
@@ -10,7 +10,7 @@ export interface SandboxFileWriteProfile {
 export interface SandboxFileWriteInput {
   targetPath: string
   content: string
-  format: 'md' | 'json' | 'txt'
+  format: 'md' | 'json' | 'txt' | 'ts' | 'js'
 }
 
 export interface SandboxFileWriteResult {

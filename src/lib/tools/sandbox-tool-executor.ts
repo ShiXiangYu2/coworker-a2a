@@ -18,6 +18,7 @@ import {
   type SandboxExecutionResult,
   type CommandWhitelistEntry,
 } from './sandbox-execution'
+import { writeSandboxDeliverable, sprint23FileWriteProfile } from '@/lib/sandbox/file-write-sandbox'
 import type { ToolExecutor } from '@/lib/agent-runtime/turn-loop'
 
 // ─── 类型定义 ──────────────────────────────────────────────────────
@@ -142,6 +143,17 @@ function resolveCommand(toolName: string, input: Record<string, unknown>): strin
     prisma_generate: () => 'npx prisma generate',
     prisma_validate: () => 'npx prisma validate',
     prisma_format: () => 'npx prisma format',
+    // Sprint 23: Controlled git write operations
+    git_add: () => {
+      const files = typeof input.files === 'string' ? input.files : '.'
+      return `git add ${files}`
+    },
+    git_commit: () => {
+      const message = typeof input.message === 'string' ? input.message : 'chore: agent commit'
+      const agentPrefix = typeof input.agentPrefix === 'string' ? input.agentPrefix : ''
+      const fullMessage = agentPrefix ? `[${agentPrefix}] ${message}` : message
+      return `git commit -m "${fullMessage.replace(/"/g, '\\"')}"`
+    },
   }
 
   const resolver = commandMap[toolName]
@@ -179,6 +191,11 @@ export function createSandboxToolExecutor(
     input: Record<string, unknown>,
   ): Promise<{ output: unknown; success: boolean; error?: string }> => {
     const startTime = Date.now()
+
+    // Sprint 23: file_write_controlled — 受控文件写入（不走 shell 命令）
+    if (toolName === 'file_write_controlled') {
+      return handleFileWriteControlled(agentId, input, startTime, executionRecords)
+    }
 
     // 解析命令
     const command = resolveCommand(toolName, input)
@@ -300,6 +317,113 @@ export function createSandboxToolExecutor(
   }
 }
 
+// ─── Sprint 23: 受控文件写入处理器 ──────────────────────────────────
+
+async function handleFileWriteControlled(
+  agentId: string,
+  input: Record<string, unknown>,
+  startTime: number,
+  records: SandboxToolExecutionRecord[],
+): Promise<{ output: unknown; success: boolean; error?: string }> {
+  const targetPath = typeof input.targetPath === 'string' ? input.targetPath : ''
+  const content = typeof input.content === 'string' ? input.content : ''
+  const format = typeof input.format === 'string' ? input.format : ''
+
+  if (!targetPath || !content || !format) {
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(),
+      agentId,
+      toolName: 'file_write_controlled',
+      command: `(file_write: ${targetPath})`,
+      result: {
+        status: 'denied',
+        stdout: '',
+        stderr: 'targetPath, content, and format are required.',
+        exitCode: -1,
+        durationMs: 0,
+        truncated: false,
+        denialReason: 'Missing required fields: targetPath, content, format.',
+      },
+      durationMs: 0,
+      timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+    return {
+      output: { status: 'denied', message: record.result.denialReason },
+      success: false,
+      error: record.result.denialReason,
+    }
+  }
+
+  try {
+    const result = await writeSandboxDeliverable(
+      { targetPath, content, format },
+      { profile: sprint23FileWriteProfile }
+    )
+
+    const durationMs = Date.now() - startTime
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(),
+      agentId,
+      toolName: 'file_write_controlled',
+      command: `(file_write: ${targetPath})`,
+      result: {
+        status: 'success',
+        stdout: JSON.stringify(result),
+        stderr: '',
+        exitCode: 0,
+        durationMs,
+        truncated: false,
+      },
+      durationMs,
+      timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+
+    console.log(
+      `[SandboxExecutor] ${agentId} wrote file "${targetPath}" → success (${durationMs}ms)`,
+    )
+
+    return {
+      output: {
+        status: 'success',
+        outputPath: result.outputPath,
+        relativePath: result.relativePath,
+        bytesWritten: result.bytesWritten,
+        contentHash: result.contentHash,
+      },
+      success: true,
+    }
+  } catch (error) {
+    const durationMs = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(),
+      agentId,
+      toolName: 'file_write_controlled',
+      command: `(file_write: ${targetPath})`,
+      result: {
+        status: 'failed',
+        stdout: '',
+        stderr: errorMessage,
+        exitCode: -1,
+        durationMs,
+        truncated: false,
+        denialReason: errorMessage,
+      },
+      durationMs,
+      timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+
+    return {
+      output: { status: 'failed', message: errorMessage },
+      success: false,
+      error: errorMessage,
+    }
+  }
+}
+
 // ─── 便捷工具定义（供 LLM 使用） ───────────────────────────────────
 
 /**
@@ -311,7 +435,7 @@ export const SANDBOX_TOOL_DEFINITIONS = [
   {
     name: 'execute_sandbox_command',
     description:
-      '在沙箱内执行一个白名单命令。允许的命令类别：test, lint, git-read, file-read, database, build。禁止：git-push, git-commit, file-write, 外部 API。',
+      '在沙箱内执行一个白名单命令。允许的命令类别：test, lint, git-read, git-write, file-read, database, build。禁止：git-push, git-merge, file-write(需用 file_write_controlled), 外部 API。',
     input_schema: {
       type: 'object',
       properties: {
@@ -389,6 +513,64 @@ export const SANDBOX_TOOL_DEFINITIONS = [
         path: { type: 'string', description: '搜索路径（默认当前目录）' },
       },
       required: ['pattern'],
+    },
+  },
+  // Sprint 23: Controlled file write
+  {
+    name: 'file_write_controlled',
+    description:
+      '在受控目录下写入文件。允许目录：deliverables/、tmp/。允许格式：.md、.json、.txt、.ts、.js。最大 50KB。路径穿越会被拒绝。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        targetPath: {
+          type: 'string',
+          description: '目标文件路径（相对于项目根目录，如 tmp/output.ts）',
+        },
+        content: {
+          type: 'string',
+          description: '文件内容',
+        },
+        format: {
+          type: 'string',
+          enum: ['md', 'json', 'txt', 'ts', 'js'],
+          description: '文件格式',
+        },
+      },
+      required: ['targetPath', 'content', 'format'],
+    },
+  },
+  // Sprint 23: Controlled git write
+  {
+    name: 'git_add',
+    description: '暂存文件到 Git（git add）。用于为 commit 准备文件。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'string',
+          description: '要暂存的文件路径（空格分隔，默认 "." 表示所有文件）',
+        },
+      },
+    },
+  },
+  {
+    name: 'git_commit',
+    description:
+      '创建 Git 提交（git commit）。commit message 会自动加上 Agent ID 前缀（如 [linus]）。禁止 push、merge。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          description: 'Commit message',
+        },
+        agentPrefix: {
+          type: 'string',
+          description: 'Agent ID 前缀（如 linus、jobs），会自动加到 message 前',
+        },
+      },
+      required: ['message'],
     },
   },
 ]

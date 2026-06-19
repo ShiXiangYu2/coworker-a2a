@@ -169,9 +169,12 @@ export function RuntimeExecutionPanel({ taskId }: { taskId?: string | null }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-gray-900">主状态</span>
               <StatusBadge status={data.highlight.primaryStatus} />
+              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-indigo-100">
+                Lifecycle: {data.lifecycle.phase}
+              </span>
             </div>
             <RecordMeta>
-              Task {data.taskId} | 最新 job {data.highlight.latestJobId ?? 'none'} | 最新 receipt {data.highlight.latestReceiptStatus ?? 'none'}
+              Task {data.taskId} | 最新 job {data.highlight.latestJobId ?? 'none'} | 最新 receipt {data.highlight.latestReceiptStatus ?? 'none'} | {data.lifecycle.reason}
             </RecordMeta>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
               <Metric label="Jobs" value={data.summary.counts.total} />

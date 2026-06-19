@@ -135,13 +135,13 @@ describe('禁止命令', () => {
     expect(output.status).toBe('forbidden')
   })
 
-  it('拒绝 git commit', async () => {
+  it('允许 git commit（Sprint 23 新增）', async () => {
     const executor = createSandboxToolExecutor('linus')
     const result = await executor('execute_sandbox_command', { command: 'git commit -m "test"' })
 
-    expect(result.success).toBe(false)
+    // git commit is now allowed in whitelist — may fail if no staged files, but not forbidden
     const output = result.output as Record<string, unknown>
-    expect(output.status).toBe('forbidden')
+    expect(['success', 'failed']).toContain(output.status)
   })
 
   it('拒绝 rm -rf', async () => {

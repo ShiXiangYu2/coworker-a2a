@@ -89,8 +89,13 @@ describe('Sandbox Execution', () => {
       expect(result).toBeTruthy()
     })
 
-    it('should detect git commit', () => {
+    it('should allow git commit (Sprint 23)', () => {
       const result = checkForbiddenPatterns('git commit -m "fix"')
+      expect(result).toBeNull()
+    })
+
+    it('should detect git commit --force', () => {
+      const result = checkForbiddenPatterns('git commit --force -m "fix"')
       expect(result).toBeTruthy()
     })
 
@@ -228,8 +233,9 @@ describe('Sandbox Execution', () => {
       for (const entry of DEFAULT_COMMAND_WHITELIST) {
         // 排除 prisma db push（这是安全的数据库同步命令）
         if (entry.pattern.includes('prisma')) continue
+        // 排除 git_write category（Sprint 23 新增的受控写操作）
+        if (entry.category === 'git_write') continue
         expect(entry.pattern).not.toContain('rm')
-        expect(entry.pattern).not.toContain('commit')
         expect(entry.pattern).not.toContain('delete')
         expect(entry.pattern).not.toContain('destroy')
       }

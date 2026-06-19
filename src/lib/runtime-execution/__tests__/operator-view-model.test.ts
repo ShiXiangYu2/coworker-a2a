@@ -5,6 +5,9 @@ vi.mock('../task-summary', () => ({
   getTaskRuntimeExecutionSummary: vi.fn(async (taskId) => taskId === 'empty-task'
     ? {
       taskId,
+      taskStatus: 'created',
+      hasWorkflowProposal: false,
+      hasEvalOrReview: false,
       jobs: [],
       counts: {
         total: 0,
@@ -29,6 +32,9 @@ vi.mock('../task-summary', () => ({
     }
     : {
       taskId,
+      taskStatus: 'review',
+      hasWorkflowProposal: true,
+      hasEvalOrReview: true,
       jobs: [
         {
           job: { id: 'job-queued', status: 'queued' },
@@ -125,6 +131,11 @@ describe('Sprint 22 runtime operator view-model adapter', () => {
 
     expect(getTaskRuntimeExecutionSummary).toHaveBeenCalledWith('task-1')
     expect(result.taskId).toBe('task-1')
+    expect(result.lifecycle).toEqual({
+      phase: 'repair',
+      source: 'runtime',
+      reason: 'A blocked or failed runtime record requires repair before further progress.',
+    })
     expect(result.summary.counts.total).toBe(3)
     expect(result.latestJob?.job?.id).toBe('job-succeeded')
     expect(result.latestReceipt?.status).toBe('dry_run')
@@ -146,6 +157,11 @@ describe('Sprint 22 runtime operator view-model adapter', () => {
     const result = await buildRuntimeOperatorTaskViewModel('empty-task')
 
     expect(result.taskId).toBe('empty-task')
+    expect(result.lifecycle).toEqual({
+      phase: 'intake',
+      source: 'task',
+      reason: 'Task status created is still in the intake lane.',
+    })
     expect(result.latestJob).toBeNull()
     expect(result.latestReceipt).toBeNull()
     expect(result.jobs).toEqual([])

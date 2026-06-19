@@ -8,7 +8,7 @@ import { execSync } from 'node:child_process'
 
 export interface CommandWhitelistEntry {
   pattern: string
-  category: 'test' | 'lint' | 'git_read' | 'file_read' | 'database' | 'build'
+  category: 'test' | 'lint' | 'git_read' | 'git_write' | 'file_read' | 'database' | 'build'
   riskLevel: 'low' | 'medium'
   description: string
 }
@@ -26,6 +26,8 @@ export const DEFAULT_COMMAND_WHITELIST: CommandWhitelistEntry[] = [
   { pattern: 'git log', category: 'git_read', riskLevel: 'low', description: 'View git log' },
   { pattern: 'git branch', category: 'git_read', riskLevel: 'low', description: 'View git branches' },
   { pattern: 'git show', category: 'git_read', riskLevel: 'low', description: 'View git show' },
+  { pattern: 'git add', category: 'git_write', riskLevel: 'medium', description: 'Stage files for commit' },
+  { pattern: 'git commit', category: 'git_write', riskLevel: 'medium', description: 'Create a commit' },
   { pattern: 'ls', category: 'file_read', riskLevel: 'low', description: 'List directory contents' },
   { pattern: 'cat', category: 'file_read', riskLevel: 'low', description: 'View file contents' },
   { pattern: 'head', category: 'file_read', riskLevel: 'low', description: 'View file head' },
@@ -44,10 +46,11 @@ export const DEFAULT_COMMAND_WHITELIST: CommandWhitelistEntry[] = [
 const FORBIDDEN_PATTERNS: RegExp[] = [
   /\brm\s+(-[rf]+\s+|--force|--recursive)/,
   /\bgit\s+push/,
-  /\bgit\s+commit/,
   /\bgit\s+merge/,
   /\bgit\s+checkout/,
   /\bgit\s+reset\s+--hard/,
+  /\bgit\s+branch\s+-[dD]/,
+  /\bgit\s+commit\s+.*--force/,
   /\bcurl\s+.*https?:\/\//,
   /\bwget\s+.*https?:\/\//,
   /\b(sudo|su)\s/,
@@ -148,7 +151,7 @@ export function executeInSandbox(
       exitCode: -1,
       durationMs: 0,
       truncated: false,
-      denialReason: `Command "${command.split(' ')[0]}" is not in the whitelist. Allowed categories: test, lint, git_read, file_read, database, build.`,
+      denialReason: `Command "${command.split(' ')[0]}" is not in the whitelist. Allowed categories: test, lint, git_read, git_write, file_read, database, build.`,
       matchedEntry: undefined,
     }
   }
