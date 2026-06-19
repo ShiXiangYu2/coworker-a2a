@@ -12,6 +12,18 @@ vi.mock('@/lib/llm', () => ({
   }),
 }))
 
+// Force analysis_only mode for tests to avoid turn-loop multi-call complexity
+vi.mock('../types', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../types')>()
+  return {
+    ...mod,
+    agentRuntimeConfig: {
+      ...mod.agentRuntimeConfig,
+      mode: 'analysis_only' as const,
+    },
+  }
+})
+
 // Must import after mock
 const { produceLLMAgentResult } = await import('../llm-producer')
 
@@ -81,18 +93,19 @@ describe('LLM Agent Result Producer', () => {
     expect(result.safetyNotes.some((n) => n.includes('analysis only'))).toBe(true)
   })
 
-  it('falls back to deterministic producer on LLM error', async () => {
+  it('returns failed status on LLM error instead of disguising as completed', async () => {
     mockChat.mockRejectedValueOnce(new Error('API error'))
 
     const result = await produceLLMAgentResult(makeTask())
 
-    // Deterministic producer returns completed with template summary
-    expect(result.status).toBe('completed')
-    expect(result.summary).toContain('jobs')
-    expect(result.safetyNotes.some((n) => n.includes('Sprint 4'))).toBe(true)
+    // Should NOT fall back to deterministic — must surface the real error
+    expect(result.status).toBe('failed')
+    expect(result.confidence).toBe(0)
+    expect(result.summary).toContain('LLM call failed')
+    expect(result.needsHumanConfirmation).toBe(true)
   })
 
-  it('falls back when LLM returns no tool use', async () => {
+  it('returns failed status when LLM returns no tool use', async () => {
     mockChat.mockResolvedValueOnce({
       content: 'Here is my analysis...',
       stopReason: 'end_turn',
@@ -100,9 +113,11 @@ describe('LLM Agent Result Producer', () => {
 
     const result = await produceLLMAgentResult(makeTask())
 
-    // Falls back to deterministic
-    expect(result.status).toBe('completed')
-    expect(result.safetyNotes.some((n) => n.includes('Sprint 4'))).toBe(true)
+    // Should NOT fall back to deterministic — must surface the real error
+    expect(result.status).toBe('failed')
+    expect(result.confidence).toBe(0)
+    expect(result.summary).toContain('did not produce a structured analysis')
+    expect(result.needsHumanConfirmation).toBe(true)
   })
 
   it('returns blocked status when LLM sets needs_human_confirmation', async () => {

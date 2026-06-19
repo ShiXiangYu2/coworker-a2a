@@ -3,7 +3,10 @@
  *
  * Uses Claude Sonnet to produce structured AgentResult via Tool Use.
  * Agent system prompts are built from auto-dev-framework Skill Prompts.
- * Falls back to deterministic producer on LLM failure.
+ *
+ * On LLM failure, returns a failed AgentResult with real error information
+ * instead of disguising the failure with a hardcoded deterministic result.
+ * The deterministic producer is only used for Kelvin (human confirmation role).
  */
 
 import { getLLMProvider } from '@/lib/llm'
@@ -330,7 +333,7 @@ export async function produceLLMAgentResultWithTurnLoop(
  * - sandbox_execution：使用 TurnLoop 多轮执行（含沙箱工具）
  * - analysis_only：单轮 produce_analysis 调用
  *
- * Falls back to deterministic producer on any error.
+ * Returns a failed AgentResult on LLM errors instead of disguising with deterministic output.
  */
 export async function produceLLMAgentResult(
   task: HarmonyTask,
@@ -405,13 +408,48 @@ export async function produceLLMAgentResult(
       return agentResult
     }
 
-    // If no tool use, fall back to deterministic
-    console.log('[LLM-Producer] Falling back to deterministic (no tool use)')
-    return produceDeterministicAgentResult(task)
+    // LLM did not produce a structured tool use result — this is a real failure
+    console.log('[LLM-Producer] LLM returned no tool use, marking as failed')
+    return {
+      status: 'failed',
+      confidence: 0,
+      summary: 'LLM did not produce a structured analysis via produce_analysis tool.',
+      findings: [
+        `Agent: ${agentId}`,
+        `LLM stop reason: ${result.stopReason}`,
+        `Content preview: ${(result.content ?? '').slice(0, 200)}`,
+      ],
+      proposedChanges: [],
+      next: {
+        recommendedAction: 'ask_human_confirmation',
+        reason: 'LLM output could not be parsed as a valid AgentResult. Human review required.',
+      },
+      sideEffects: { filesChanged: [], branchesCreated: [], prsCreated: [], issuesUpdated: [] },
+      needsHumanConfirmation: true,
+      safetyNotes: [LLM_SAFETY_NOTE],
+    }
   } catch (error) {
-    // On any LLM error, fall back to deterministic behavior
-    console.log('[LLM-Producer] LLM error, falling back to deterministic:', error)
-    return produceDeterministicAgentResult(task)
+    // LLM call failed — surface the real error, do not disguise it
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('[LLM-Producer] LLM call failed:', errorMessage)
+    return {
+      status: 'failed',
+      confidence: 0,
+      summary: `LLM call failed: ${errorMessage}`,
+      findings: [
+        `Agent: ${agentId}`,
+        `Error: ${errorMessage}`,
+        'No analysis was produced. The task requires human intervention or LLM retry.',
+      ],
+      proposedChanges: [],
+      next: {
+        recommendedAction: 'ask_human_confirmation',
+        reason: 'LLM execution failed. Human review required.',
+      },
+      sideEffects: { filesChanged: [], branchesCreated: [], prsCreated: [], issuesUpdated: [] },
+      needsHumanConfirmation: true,
+      safetyNotes: [LLM_SAFETY_NOTE],
+    }
   }
 }
 

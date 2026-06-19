@@ -14,8 +14,6 @@ import { buildAgentSystemPrompt } from './prompts/skills'
 import { findRelevantEvidence } from '@/lib/evidence/repository'
 import { executeToolCall } from '@/lib/tools/executor'
 import { prisma } from '@/lib/prisma'
-import type { HarmonyTask } from '@/lib/harmony/types'
-import { produceDeterministicAgentResult } from '@/lib/agent-runtime/producer'
 
 /** 子任务执行结果 */
 export interface SubTaskResult {
@@ -408,65 +406,20 @@ export async function executeAgentTask(
       durationMs: Date.now() - startTime,
     }
   } catch (error) {
-    // On LLM error, fall back to deterministic producer
-    const task: HarmonyTask = {
-      id: `subtask-${Date.now()}`,
-      title: taskDescription.slice(0, 80),
-      description: taskDescription,
-      type: 'coordination',
-      targetAgentId: typedAgentId,
-      confidence: 0.7,
-      reason: 'Multi-agent decomposition sub-task',
-      status: 'queued',
-      routeDecisionType: 'delegate_to_agent' as const,
-      routeStatus: 'ready' as const,
-      matchedSignals: [],
-      routeDecisionSnapshot: {
-        status: 'ready',
-        decisionType: 'delegate_to_agent',
-        targetAgentId: typedAgentId,
-        confidence: 0.7,
-        reason: 'Multi-agent decomposition sub-task',
-        matchedSignals: [],
-        requiresHumanConfirmation: false,
-        next: {
-          recommendedAction: 'show_route_suggestion',
-          reason: 'Multi-agent decomposition sub-task',
-        },
-        sideEffects: {
-          filesChanged: [],
-          branchesCreated: [],
-          prsCreated: [],
-          issuesUpdated: [],
-        },
-      },
-      requiresHumanConfirmation: false,
-      sideEffects: {
-        filesChanged: [],
-        branchesCreated: [],
-        prsCreated: [],
-        issuesUpdated: [],
-      },
-      createdBy: 'system',
-      conversationId: undefined,
-      sourceMessageId: undefined,
-      sourceMessageText: taskDescription,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
-    const fallbackResult = produceDeterministicAgentResult(task)
+    // LLM call failed — surface the real error instead of disguising it
+    const errorMessage = error instanceof Error ? error.message : 'unknown'
+    console.error(`[TaskExecutor] LLM call failed for agent ${typedAgentId}:`, errorMessage)
     return {
       agentId: typedAgentId,
       agentName: agent.name,
       title: taskDescription.slice(0, 80),
-      status: 'completed',
-      confidence: fallbackResult.confidence,
-      summary: fallbackResult.summary,
-      findings: fallbackResult.findings,
+      status: 'failed',
+      confidence: 0,
+      summary: `Agent execution failed: ${errorMessage}`,
+      findings: [`LLM error: ${errorMessage}`],
       deliverables: [],
       durationMs: Date.now() - startTime,
-      error: `LLM call failed: ${error instanceof Error ? error.message : 'unknown'}. Used deterministic fallback.`,
+      error: `LLM call failed: ${errorMessage}`,
     }
   }
 }

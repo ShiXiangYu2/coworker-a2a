@@ -62,11 +62,11 @@ export function validateAgentResult(result: AgentResult): AgentResult {
 
   if (
     !result.safetyNotes.some(
-      (note) => note.includes('Sprint 4') || note.includes('analysis only')
+      (note) => note.includes('Sprint') || note.includes('analysis only') || note.includes('LLM call failed')
     )
   ) {
     throw new InvalidAgentResultError(
-      'AgentResult safetyNotes must include a boundary note (Sprint 4 or LLM analysis-only).'
+      'AgentResult safetyNotes must include a boundary note (Sprint, LLM analysis-only, or LLM failure).'
     )
   }
 

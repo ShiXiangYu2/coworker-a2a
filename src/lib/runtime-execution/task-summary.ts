@@ -6,6 +6,7 @@ import type {
 } from './read-models'
 import { getRuntimeDispatchJobTimeline } from './timeline'
 import { SPRINT_22_SAFETY_NOTE } from './types'
+import { getTaskBundle } from '@/lib/harmony/repository'
 
 const LIVE_JOB_STATUSES = new Set(['queued', 'leased', 'running'])
 
@@ -32,6 +33,7 @@ export async function getTaskRuntimeExecutionSummary(taskId: string): Promise<Ta
   const normalizedTaskId = taskId.trim()
   if (!normalizedTaskId) throw new RuntimeExecutionApiError('taskId is required.')
 
+  const taskBundle = await getTaskBundle(normalizedTaskId)
   const records = await listRuntimeDispatchJobs({ taskId: normalizedTaskId, limit: 100 })
   const jobs = await Promise.all(records.map((job) => getRuntimeDispatchJobTimeline(job.id)))
   const counts = emptyCounts()
@@ -63,6 +65,9 @@ export async function getTaskRuntimeExecutionSummary(taskId: string): Promise<Ta
 
   return {
     taskId: normalizedTaskId,
+    taskStatus: taskBundle?.task?.status ?? null,
+    hasWorkflowProposal: false,
+    hasEvalOrReview: false,
     jobs,
     counts,
     receipts,

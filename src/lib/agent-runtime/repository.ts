@@ -10,7 +10,6 @@ import {
   defaultMustReview,
 } from '@/lib/harmony/route-to-task'
 import { transitionAgentRun } from './state-machine'
-import { produceDeterministicAgentResult } from './producer'
 import { produceLLMAgentResult } from './llm-producer'
 import { validateAgentResult } from './validator'
 import { serializeAgentRun, serializeAgentStep } from './serializers'
@@ -51,18 +50,45 @@ export async function startAgentRunFromTask(
   }
 
   const harmonyTask = recordToHarmonyTask(task)
-  // Try LLM-driven analysis first, fall back to deterministic on error
+  // Try LLM-driven analysis first. On error, produce a failed result with real info.
   let usedLLM = false
   let rawResult: Awaited<ReturnType<typeof produceLLMAgentResult>>
   try {
     rawResult = await produceLLMAgentResult(harmonyTask)
     usedLLM = true
-  } catch {
-    rawResult = produceDeterministicAgentResult(harmonyTask)
+  } catch (error) {
+    // Unexpected error from produceLLMAgentResult (should be rare since it catches internally)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    rawResult = {
+      status: 'failed',
+      confidence: 0,
+      summary: `Agent analysis failed: ${errorMessage}`,
+      findings: [`LLM error: ${errorMessage}`],
+      proposedChanges: [],
+      next: {
+        recommendedAction: 'ask_human_confirmation',
+        reason: 'LLM execution failed. Human review required.',
+      },
+      sideEffects: { filesChanged: [], branchesCreated: [], prsCreated: [], issuesUpdated: [] },
+      needsHumanConfirmation: true,
+      safetyNotes: ['LLM call failed. No analysis was produced.'],
+    }
   }
   let result = validateAgentResult(rawResult)
   if (result.findings.length === 0 && result.proposedChanges.length === 0) {
-    result = produceDeterministicAgentResult(harmonyTask)
+    // Empty result from LLM is a real failure — don't disguise it
+    result = {
+      ...result,
+      status: 'failed',
+      confidence: 0,
+      summary: 'LLM produced an empty analysis with no findings or proposed changes.',
+      findings: ['LLM returned empty result. The model may not have understood the task.'],
+      next: {
+        recommendedAction: 'ask_human_confirmation',
+        reason: 'Empty LLM result. Human review required.',
+      },
+      needsHumanConfirmation: true,
+    }
     usedLLM = false
   }
   const correlationId = `agent-${task.id}-${Date.now()}`
@@ -117,7 +143,7 @@ export async function startAgentRunFromTask(
       index: 1,
       kind: 'build_agent_prompt',
       status: 'completed',
-      summary: 'Built analysis-only prompt boundary for deterministic AgentResult producer.',
+      summary: 'Built analysis-only prompt boundary for LLM AgentResult producer.',
       input: { targetAgentId: task.targetAgentId },
       output: { runtimeMode: 'analysis_only' },
     })
@@ -130,8 +156,8 @@ export async function startAgentRunFromTask(
       status: 'completed',
       summary: usedLLM
         ? 'Produced AgentResult via LLM tool use.'
-        : 'Produced deterministic AgentResult (LLM fallback).',
-      input: { producer: usedLLM ? 'llm' : 'deterministic' },
+        : 'AgentResult failed — LLM did not produce valid output.',
+      input: { producer: usedLLM ? 'llm' : 'failed' },
       output: result,
     })
     await insertAgentStep(tx, {
@@ -216,7 +242,7 @@ export async function startAgentRunFromTask(
           afterStatus: 'running',
           reason: usedLLM
             ? 'AgentRun started with LLM-driven analysis.'
-            : 'AgentRun started deterministic analysis.',
+            : 'AgentRun started but LLM analysis failed.',
           payloadJson: encodeJson({ agentRunId }),
         },
         {
