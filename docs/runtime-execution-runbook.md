@@ -136,54 +136,6 @@ Content-Type: application/json
 
 This API is for development and verification only. It creates one active token and one queued job, but it does not claim, start, complete, run a runner, or write to Obsidian.
 
-<<<<<<< HEAD
-## Issue From Approved Plan
-
-Use the approved-plan issuance API when a low-risk execution plan has already passed human approval and should become one runtime token plus one queued job:
-
-```http
-POST /api/runtime/jobs/from-approved-plan
-Content-Type: application/json
-
-{
-  "taskId": "task-123",
-  "agentRunId": "agent-run-123",
-  "executionPlanRecordId": "execution-plan-123",
-  "executionApprovalRecordId": "execution-approval-123",
-  "approvedBy": "kelvin",
-  "issuedBy": "operator",
-  "approvalStatus": "approved",
-  "connectorId": "obsidian_local",
-  "actionType": "write_local_markdown_draft",
-  "riskLevel": "low",
-  "requiresHumanApproval": true,
-  "idempotencyKey": "runtime:task-123:obsidian-draft",
-  "summary": "Issue one approved Obsidian Markdown draft write.",
-  "payload": {
-    "draftTitle": "Approved draft",
-    "filename": "approved-draft.md",
-    "content": "# Approved draft",
-    "targetDirectoryLabel": "Inbox/AI Drafts"
-  },
-  "scope": {
-    "connectorId": "obsidian_local",
-    "actionType": "write_local_markdown_draft",
-    "allowedVaultRoot": "D:\\AI-Vault",
-    "allowedTargetDirectoryLabel": "Inbox/AI Drafts",
-    "allowedFilename": "approved-draft.md",
-    "taskId": "task-123",
-    "agentRunId": "agent-run-123",
-    "executionPlanRecordId": "execution-plan-123",
-    "idempotencyKey": "runtime:task-123:obsidian-draft",
-    "expiresAt": "2026-06-20T00:00:00.000Z"
-  }
-}
-```
-
-This endpoint only issues records. It creates one `active` `RuntimeExecutionToken` and one `queued` `RuntimeDispatchJob`; it does not claim, start, complete, run a runner, call Obsidian, or execute any connector.
-
-=======
->>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
 ## Dry-Run Verification Helper
 
 Use this helper when you only want to verify the controlled lifecycle and audit records:
@@ -210,14 +162,6 @@ GET /api/runtime/jobs/<job-id>/timeline
 
 This is a read-only operator/developer summary API. It returns the job, token, attempts, receipt, recovery points, and derived status metadata such as `hasReceipt`, `receiptStatus`, `attemptCount`, `recoveryCount`, `isTerminal`, and `leaseActive`. It does not mutate runtime state or execute any connector.
 
-<<<<<<< HEAD
-To keep the current data model honest, Sprint 22 now exposes conservative issuance visibility hints rather than claiming it can always distinguish seed-created jobs from approved-plan-created jobs. Timeline derived fields may include:
-
-- `issuedRuntimeTokenActive`
-- `awaitingRuntimeExecution`
-
-=======
->>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
 Task runtime summary:
 
 ```http
@@ -236,11 +180,6 @@ GET /api/tasks/<task-id>/runtime-operator-view
 
 This endpoint is a read-only operator-facing adapter over the task runtime summary. It returns `summary`, `latestJob`, `latestReceipt`, `statusBands`, and `highlight` fields for future Operator Console consumption. It does not claim jobs, run workers, complete jobs, or execute connectors.
 
-<<<<<<< HEAD
-The operator view `highlight` may include a `primaryHint` when a queued job has an active runtime token and is still awaiting execution. This is a read-only observability hint, not an execution control or approval surface.
-
-=======
->>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
 Operator Console runtime panel:
 
 - component: `src/components/operator-console/runtime-execution-panel.tsx`

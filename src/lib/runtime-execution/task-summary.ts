@@ -69,10 +69,6 @@ export async function getTaskRuntimeExecutionSummary(taskId: string): Promise<Ta
     derived: {
       hasAnyLiveJob: jobs.some((timeline) => Boolean(timeline.job?.status && LIVE_JOB_STATUSES.has(timeline.job.status))),
       hasAnySucceededJob: counts.succeeded > 0,
-<<<<<<< HEAD
-      hasAnyAwaitingRuntimeExecution: jobs.some((timeline) => timeline.derived.awaitingRuntimeExecution),
-=======
->>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
       latestJobId,
     },
     safetyNote: SPRINT_22_SAFETY_NOTE,

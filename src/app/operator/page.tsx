@@ -146,18 +146,6 @@ export default async function OperatorConsole({
             <div id="runtime" className="scroll-mt-16 xl:col-span-2">
               <div className="space-y-3">
                 <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-<<<<<<< HEAD
-                  <div className="text-sm font-semibold text-gray-950">运行时任务筛选</div>
-                  <p className="mt-1 break-words text-sm text-gray-600">
-                    {runtimeTaskId ? (
-                      <>
-                        正在查看任务 {runtimeTaskId} 的 Sprint 22 只读运行时视图。
-                      </>
-                    ) : (
-                      <>
-                        当前未指定 runtimeTaskId。可以在地址中追加 ?runtimeTaskId=&lt;task-id&gt; 查看指定任务，
-                        也可以使用下方自动加载的最近任务只读视图。
-=======
                   <div className="text-sm font-semibold text-gray-950">Runtime Execution Task Filter</div>
                   <p className="mt-1 break-words text-sm text-gray-600">
                     {runtimeTaskId ? (
@@ -167,7 +155,6 @@ export default async function OperatorConsole({
                     ) : (
                       <>
                         No runtimeTaskId selected. Add ?runtimeTaskId=&lt;task-id&gt; to inspect one Sprint 22 runtime execution view, or use the automatic latest-task view below.
->>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
                       </>
                     )}
                   </p>

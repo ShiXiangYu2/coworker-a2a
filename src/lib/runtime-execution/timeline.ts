@@ -48,11 +48,6 @@ export async function getRuntimeDispatchJobTimeline(jobId: string): Promise<Runt
       recoveryCount: recovery.length,
       isTerminal: TERMINAL_JOB_STATUSES.has(job.status),
       leaseActive,
-<<<<<<< HEAD
-      issuedRuntimeTokenActive: Boolean(job.runtimeTokenId && token?.status === 'active'),
-      awaitingRuntimeExecution: job.status === 'queued' && !receipt,
-=======
->>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
     },
     safetyNote: SPRINT_22_SAFETY_NOTE,
   }

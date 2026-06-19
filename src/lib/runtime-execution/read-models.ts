@@ -13,11 +13,6 @@ export interface RuntimeDispatchJobTimelineDerivedReadModel {
   recoveryCount: number
   isTerminal: boolean
   leaseActive: boolean
-<<<<<<< HEAD
-  issuedRuntimeTokenActive: boolean
-  awaitingRuntimeExecution: boolean
-=======
->>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
 }
 
 export interface RuntimeDispatchJobTimelineReadModel {
@@ -49,10 +44,6 @@ export interface TaskRuntimeExecutionSummaryReceiptsReadModel {
 export interface TaskRuntimeExecutionSummaryDerivedReadModel {
   hasAnyLiveJob: boolean
   hasAnySucceededJob: boolean
-<<<<<<< HEAD
-  hasAnyAwaitingRuntimeExecution: boolean
-=======
->>>>>>> 5e55954a4c8294d13c20571cd34d44c3bfaf0906
   latestJobId: string | null
 }
 
