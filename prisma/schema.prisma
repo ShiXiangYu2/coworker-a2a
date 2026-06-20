@@ -3666,3 +3666,92 @@ model PolicyRecord {
   @@index([createdAt])
   @@map("policy_records")
 }
+
+// ─── Sprint 25: Persistent State ─────────────────────────────────
+// 持久化模型：替代内存存储，进程重启不丢失状态
+
+model PersistentEvent {
+  id             String   @id @default(cuid())
+  eventType      String
+  agentId        String
+  taskId         String?
+  dataJson       String   @default("{}")
+  createdAt      DateTime @default(now())
+
+  @@index([eventType])
+  @@index([agentId])
+  @@index([taskId])
+  @@index([createdAt])
+  @@map("persistent_events")
+}
+
+model PersistentTask {
+  id             String   @id @default(cuid())
+  priority       String   @default("normal")
+  agentId        String
+  description    String
+  estimatedTokens Int     @default(10000)
+  dependsOnJson  String   @default("[]")
+  status         String   @default("queued")
+  resultJson     String?
+  error          String?
+  enqueuedAt     DateTime @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  @@index([status])
+  @@index([priority])
+  @@index([agentId])
+  @@index([enqueuedAt])
+  @@map("persistent_tasks")
+}
+
+model RoutingWeightRecord {
+  id             String   @id @default(cuid())
+  agentId        String
+  taskType       String
+  currentWeight  Float    @default(1.0)
+  suggestedWeight Float   @default(1.0)
+  reason         String   @default("")
+  sampleSize     Int      @default(0)
+  successRate    Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([agentId, taskType])
+  @@index([agentId])
+  @@index([taskType])
+  @@map("routing_weight_records")
+}
+
+model RoutingDecisionRecord {
+  id             String   @id @default(cuid())
+  agentId        String
+  taskType       String
+  routeConfidence Float   @default(0)
+  executionStatus String  @default("completed")
+  executionConfidence Float @default(0)
+  durationMs     Int      @default(0)
+  matchedSignalsJson String @default("[]")
+  createdAt      DateTime @default(now())
+
+  @@index([agentId])
+  @@index([taskType])
+  @@index([executionStatus])
+  @@index([createdAt])
+  @@map("routing_decision_records")
+}
+
+model RateLimitRecord {
+  id             String   @id @default(cuid())
+  windowType     String   @default("minute")
+  windowStart    DateTime
+  requestCount   Int      @default(0)
+  tokenCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([windowType, windowStart])
+  @@index([windowType])
+  @@map("rate_limit_records")
+}

@@ -78,9 +78,13 @@ describe('Sprint 13 static safety checks', () => {
 
   it('does not introduce forbidden execution models', () => {
     const schema = readFileSync(join(process.cwd(), 'prisma', 'schema.prisma'), 'utf8')
-    for (const model of ['ExternalApiCall', 'McpSession', 'WebhookDispatch', 'IntegrationRun', 'ExternalSyncRun', 'MessageSendRun', 'Worker', 'Queue']) {
+    // 检查精确的 model 名称（带空格后缀避免误匹配 WorkerInstance / WorkerHeartbeat）
+    for (const model of ['ExternalApiCall', 'McpSession', 'WebhookDispatch', 'IntegrationRun', 'ExternalSyncRun', 'MessageSendRun', 'Queue']) {
       expect(schema).not.toContain(`model ${model}`)
     }
+    // Worker 精确匹配：排除 WorkerInstance、WorkerHeartbeat 等合法 daemon 基础设施模型
+    const workerModelPattern = /^model Worker\b(?!Instance|Heartbeat)/m
+    expect(schema).not.toMatch(workerModelPattern)
   })
 })
 

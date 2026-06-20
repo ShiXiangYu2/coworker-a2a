@@ -20,6 +20,7 @@ import {
 } from './sandbox-execution'
 import { writeSandboxDeliverable, sprint23FileWriteProfile } from '@/lib/sandbox/file-write-sandbox'
 import type { ToolExecutor } from '@/lib/agent-runtime/turn-loop'
+import type { AgentId } from '@/lib/agents/types'
 
 // ─── 类型定义 ──────────────────────────────────────────────────────
 
@@ -195,6 +196,24 @@ export function createSandboxToolExecutor(
     // Sprint 23: file_write_controlled — 受控文件写入（不走 shell 命令）
     if (toolName === 'file_write_controlled') {
       return handleFileWriteControlled(agentId, input, startTime, executionRecords)
+    }
+
+    // Execution Closure — 完整代码修改闭环
+    if (toolName === 'execute_code_closure') {
+      return handleExecuteCodeClosure(agentId, input, startTime, executionRecords)
+    }
+
+    // Collaboration tools
+    if (toolName === 'collaborate_with_agent') {
+      return handleCollaborateWithAgent(agentId, input, startTime, executionRecords)
+    }
+    if (toolName === 'reply_to_collaboration') {
+      return handleReplyToCollaboration(agentId, input, startTime, executionRecords)
+    }
+
+    // Deployment tools
+    if (toolName === 'run_deployment_pipeline') {
+      return handleRunDeploymentPipeline(agentId, input, startTime, executionRecords)
     }
 
     // 解析命令
@@ -424,6 +443,325 @@ async function handleFileWriteControlled(
   }
 }
 
+// ─── Execution Closure 处理器 ──────────────────────────────────────
+
+async function handleExecuteCodeClosure(
+  agentId: string,
+  input: Record<string, unknown>,
+  startTime: number,
+  records: SandboxToolExecutionRecord[],
+): Promise<{ output: unknown; success: boolean; error?: string }> {
+  const description = typeof input.description === 'string' ? input.description : ''
+  const files = Array.isArray(input.files) ? input.files : []
+  const skipTests = typeof input.skipTests === 'boolean' ? input.skipTests : false
+
+  if (!description || files.length === 0) {
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(),
+      agentId,
+      toolName: 'execute_code_closure',
+      command: '(validation)',
+      result: {
+        status: 'denied',
+        stdout: '',
+        stderr: 'description and files are required.',
+        exitCode: -1,
+        durationMs: 0,
+        truncated: false,
+        denialReason: 'Missing required fields: description, files.',
+      },
+      durationMs: 0,
+      timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+    return {
+      output: { status: 'denied', message: record.result.denialReason },
+      success: false,
+      error: record.result.denialReason,
+    }
+  }
+
+  try {
+    const { executeCodeClosure } = await import('@/lib/execution-closure/engine')
+    const result = await executeCodeClosure(agentId, 'adhoc-' + Date.now(), files, description, {
+      skipTests,
+      requiresHumanConfirmation: false,
+      commitPrefix: agentId,
+    })
+
+    const durationMs = Date.now() - startTime
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(),
+      agentId,
+      toolName: 'execute_code_closure',
+      command: `(closure: ${description.slice(0, 50)})`,
+      result: {
+        status: result.success ? 'success' : 'failed',
+        stdout: JSON.stringify({
+          success: result.success,
+          validation: result.validation,
+          git: result.git,
+          stepCount: result.plan.steps.length,
+          completedSteps: result.plan.steps.filter((s) => s.status === 'completed').length,
+        }),
+        stderr: result.error ?? '',
+        exitCode: result.success ? 0 : 1,
+        durationMs,
+        truncated: false,
+      },
+      durationMs,
+      timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+
+    console.log(
+      `[SandboxExecutor] ${agentId} executed code closure "${description.slice(0, 50)}" → ${result.success ? 'success' : 'failed'} (${durationMs}ms)`,
+    )
+
+    return {
+      output: {
+        status: result.success ? 'success' : 'failed',
+        validation: result.validation,
+        git: result.git,
+        durationMs: result.durationMs,
+        stepResults: result.plan.steps.map((s) => ({
+          type: s.type,
+          status: s.status,
+          error: s.error,
+        })),
+      },
+      success: result.success,
+      error: result.error,
+    }
+  } catch (error) {
+    const durationMs = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(),
+      agentId,
+      toolName: 'execute_code_closure',
+      command: `(closure: ${description.slice(0, 50)})`,
+      result: {
+        status: 'failed',
+        stdout: '',
+        stderr: errorMessage,
+        exitCode: -1,
+        durationMs,
+        truncated: false,
+        denialReason: errorMessage,
+      },
+      durationMs,
+      timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+
+    return {
+      output: { status: 'failed', message: errorMessage },
+      success: false,
+      error: errorMessage,
+    }
+  }
+}
+
+// ─── Collaboration 处理器 ──────────────────────────────────────────
+
+async function handleCollaborateWithAgent(
+  agentId: string,
+  input: Record<string, unknown>,
+  startTime: number,
+  records: SandboxToolExecutionRecord[],
+): Promise<{ output: unknown; success: boolean; error?: string }> {
+  const toAgentId = typeof input.toAgentId === 'string' ? input.toAgentId : ''
+  const subject = typeof input.subject === 'string' ? input.subject : ''
+  const body = typeof input.body === 'string' ? input.body : ''
+  const type = typeof input.type === 'string' ? input.type : 'finding'
+
+  if (!toAgentId || !subject || !body) {
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(),
+      agentId,
+      toolName: 'collaborate_with_agent',
+      command: '(validation)',
+      result: {
+        status: 'denied', stdout: '', stderr: 'toAgentId, subject, and body are required.',
+        exitCode: -1, durationMs: 0, truncated: false, denialReason: 'Missing required fields.',
+      },
+      durationMs: 0, timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+    return { output: { status: 'denied', message: record.result.denialReason }, success: false, error: record.result.denialReason }
+  }
+
+  try {
+    const { collaborate } = await import('@/lib/collaboration/engine')
+    const result = await collaborate({
+      fromAgentId: agentId as AgentId,
+      toAgentId: toAgentId as AgentId,
+      taskId: 'adhoc-' + Date.now(),
+      subject,
+      body,
+      type: type as 'handoff' | 'review_request' | 'clarification' | 'finding' | 'decision_input',
+    })
+
+    const durationMs = Date.now() - startTime
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(),
+      agentId,
+      toolName: 'collaborate_with_agent',
+      command: `(collab: ${subject.slice(0, 50)})`,
+      result: {
+        status: 'success',
+        stdout: JSON.stringify({ sessionId: result.sessionId, threadId: result.threadId, status: result.status }),
+        stderr: '', exitCode: 0, durationMs, truncated: false,
+      },
+      durationMs, timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+
+    return {
+      output: { status: 'success', sessionId: result.sessionId, threadId: result.threadId, handoffId: result.handoffId, collaborationStatus: result.status },
+      success: true,
+    }
+  } catch (error) {
+    const durationMs = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(), agentId, toolName: 'collaborate_with_agent', command: '(collab)',
+      result: { status: 'failed', stdout: '', stderr: errorMessage, exitCode: -1, durationMs, truncated: false, denialReason: errorMessage },
+      durationMs, timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+    return { output: { status: 'failed', message: errorMessage }, success: false, error: errorMessage }
+  }
+}
+
+async function handleReplyToCollaboration(
+  agentId: string,
+  input: Record<string, unknown>,
+  startTime: number,
+  records: SandboxToolExecutionRecord[],
+): Promise<{ output: unknown; success: boolean; error?: string }> {
+  const threadId = typeof input.threadId === 'string' ? input.threadId : ''
+  const subject = typeof input.subject === 'string' ? input.subject : ''
+  const body = typeof input.body === 'string' ? input.body : ''
+
+  if (!threadId || !subject || !body) {
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(), agentId, toolName: 'reply_to_collaboration', command: '(validation)',
+      result: { status: 'denied', stdout: '', stderr: 'threadId, subject, and body are required.', exitCode: -1, durationMs: 0, truncated: false, denialReason: 'Missing required fields.' },
+      durationMs: 0, timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+    return { output: { status: 'denied', message: record.result.denialReason }, success: false, error: record.result.denialReason }
+  }
+
+  try {
+    const { replyCollaboration } = await import('@/lib/collaboration/engine')
+    const result = await replyCollaboration(threadId, agentId as AgentId, subject, body, 'adhoc-' + Date.now())
+
+    const durationMs = Date.now() - startTime
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(), agentId, toolName: 'reply_to_collaboration', command: `(reply: ${subject.slice(0, 50)})`,
+      result: { status: 'success', stdout: JSON.stringify({ turnId: result.turnId }), stderr: '', exitCode: 0, durationMs, truncated: false },
+      durationMs, timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+
+    return { output: { status: 'success', turnId: result.turnId }, success: true }
+  } catch (error) {
+    const durationMs = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(), agentId, toolName: 'reply_to_collaboration', command: '(reply)',
+      result: { status: 'failed', stdout: '', stderr: errorMessage, exitCode: -1, durationMs, truncated: false, denialReason: errorMessage },
+      durationMs, timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+    return { output: { status: 'failed', message: errorMessage }, success: false, error: errorMessage }
+  }
+}
+
+// ─── Deployment 处理器 ─────────────────────────────────────────────
+
+async function handleRunDeploymentPipeline(
+  agentId: string,
+  input: Record<string, unknown>,
+  startTime: number,
+  records: SandboxToolExecutionRecord[],
+): Promise<{ output: unknown; success: boolean; error?: string }> {
+  const branchName = typeof input.branchName === 'string' ? input.branchName : ''
+  const files = Array.isArray(input.files) ? input.files : []
+  const prTitle = typeof input.prTitle === 'string' ? input.prTitle : ''
+  const prBody = typeof input.prBody === 'string' ? input.prBody : ''
+  const targetBranch = typeof input.targetBranch === 'string' ? input.targetBranch : 'main'
+  const skipCI = typeof input.skipCI === 'boolean' ? input.skipCI : false
+
+  if (!branchName || files.length === 0 || !prTitle) {
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(), agentId, toolName: 'run_deployment_pipeline', command: '(validation)',
+      result: { status: 'denied', stdout: '', stderr: 'branchName, files, and prTitle are required.', exitCode: -1, durationMs: 0, truncated: false, denialReason: 'Missing required fields.' },
+      durationMs: 0, timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+    return { output: { status: 'denied', message: record.result.denialReason }, success: false, error: record.result.denialReason }
+  }
+
+  try {
+    const { runPipeline } = await import('@/lib/deployment/pipeline')
+    const result = await runPipeline({
+      agentId,
+      taskId: 'adhoc-' + Date.now(),
+      branchName,
+      files: files as Array<{ path: string; content: string; action: 'create' | 'modify' | 'delete' }>,
+      prTitle,
+      prBody: prBody || prTitle,
+      targetBranch,
+      skipCI,
+    })
+
+    const durationMs = Date.now() - startTime
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(), agentId, toolName: 'run_deployment_pipeline', command: `(pipeline: ${branchName})`,
+      result: {
+        status: result.status === 'completed' ? 'success' : 'failed',
+        stdout: JSON.stringify({
+          status: result.status,
+          prNumber: result.pr?.number,
+          prUrl: result.pr?.url,
+          stages: result.stages.map((s) => ({ stage: s.stage, status: s.status })),
+        }),
+        stderr: result.stages.find((s) => s.status === 'failed')?.error ?? '',
+        exitCode: result.status === 'completed' ? 0 : 1,
+        durationMs, truncated: false,
+      },
+      durationMs, timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+
+    return {
+      output: {
+        status: result.status,
+        prNumber: result.pr?.number,
+        prUrl: result.pr?.url,
+        stages: result.stages.map((s) => ({ stage: s.stage, status: s.status, error: s.error })),
+        durationMs: result.durationMs,
+      },
+      success: result.status === 'completed',
+      error: result.stages.find((s) => s.status === 'failed')?.error,
+    }
+  } catch (error) {
+    const durationMs = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const record: SandboxToolExecutionRecord = {
+      id: randomUUID(), agentId, toolName: 'run_deployment_pipeline', command: `(pipeline: ${branchName})`,
+      result: { status: 'failed', stdout: '', stderr: errorMessage, exitCode: -1, durationMs, truncated: false, denialReason: errorMessage },
+      durationMs, timestamp: new Date().toISOString(),
+    }
+    records.push(record)
+    return { output: { status: 'failed', message: errorMessage }, success: false, error: errorMessage }
+  }
+}
+
 // ─── 便捷工具定义（供 LLM 使用） ───────────────────────────────────
 
 /**
@@ -571,6 +909,158 @@ export const SANDBOX_TOOL_DEFINITIONS = [
         },
       },
       required: ['message'],
+    },
+  },
+  // Memory search tool
+  {
+    name: 'search_memory',
+    description:
+      '搜索历史记忆。使用语义检索查找与查询相关的过去工作记录、发现和上下文。适合在需要回顾历史工作或查找相关上下文时使用。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: '搜索查询（自然语言描述你要找的内容）',
+        },
+        limit: {
+          type: 'number',
+          description: '返回结果数量上限（默认 5，最大 10）',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  // Execution Closure tool
+  {
+    name: 'execute_code_closure',
+    description:
+      '执行完整的代码修改闭环：写入文件 → TypeScript 类型检查 → ESLint → 测试 → Git 提交。这是最高级别的代码修改工具，会自动运行所有验证步骤。如果任何验证步骤失败，整个流程会停止并报告错误。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        description: {
+          type: 'string',
+          description: '本次代码修改的描述',
+        },
+        files: {
+          type: 'array',
+          description: '要修改的文件列表',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: '文件路径（相对于项目根目录）' },
+              action: { type: 'string', enum: ['create', 'modify', 'delete'], description: '操作类型' },
+              content: { type: 'string', description: '文件内容（create/modify 时必填）' },
+              reason: { type: 'string', description: '修改原因' },
+            },
+            required: ['path', 'action', 'reason'],
+          },
+        },
+        skipTests: {
+          type: 'boolean',
+          description: '是否跳过测试（紧急修复时可选，默认 false）',
+        },
+      },
+      required: ['description', 'files'],
+    },
+  },
+  // Collaboration tools
+  {
+    name: 'collaborate_with_agent',
+    description:
+      '向其他 Agent 发起协作请求。可以委派任务、请求审查、寻求澄清或分享发现。接收方 Agent 会收到通知并可以回复。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        toAgentId: {
+          type: 'string',
+          enum: ['jobs', 'linus', 'turing', 'bezos', 'elon', 'kelvin'],
+          description: '目标 Agent ID',
+        },
+        subject: {
+          type: 'string',
+          description: '协作主题',
+        },
+        body: {
+          type: 'string',
+          description: '协作内容（详细描述你需要什么）',
+        },
+        type: {
+          type: 'string',
+          enum: ['handoff', 'review_request', 'clarification', 'finding', 'decision_input'],
+          description: '协作类型',
+        },
+      },
+      required: ['toAgentId', 'subject', 'body', 'type'],
+    },
+  },
+  {
+    name: 'reply_to_collaboration',
+    description:
+      '回复协作请求。将你的工作成果回传给发起协作的 Agent。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: '协作线程 ID',
+        },
+        subject: {
+          type: 'string',
+          description: '回复主题',
+        },
+        body: {
+          type: 'string',
+          description: '回复内容（你的工作成果或分析）',
+        },
+      },
+      required: ['threadId', 'subject', 'body'],
+    },
+  },
+  // Deployment tools
+  {
+    name: 'run_deployment_pipeline',
+    description:
+      '运行完整的部署流水线：创建 Git 分支 → 提交代码 → 创建 PR → 等待 CI 通过 → 合并。这是最高级别的部署工具，会自动执行所有步骤。如果 CI 失败，流水线会停止。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        branchName: {
+          type: 'string',
+          description: 'Git 分支名称（如 feature/add-auth）',
+        },
+        files: {
+          type: 'array',
+          description: '要提交的文件列表',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: '文件路径' },
+              content: { type: 'string', description: '文件内容' },
+              action: { type: 'string', enum: ['create', 'modify', 'delete'], description: '操作类型' },
+            },
+            required: ['path', 'content', 'action'],
+          },
+        },
+        prTitle: {
+          type: 'string',
+          description: 'PR 标题',
+        },
+        prBody: {
+          type: 'string',
+          description: 'PR 描述',
+        },
+        targetBranch: {
+          type: 'string',
+          description: '目标分支（默认 main）',
+        },
+        skipCI: {
+          type: 'boolean',
+          description: '是否跳过 CI（紧急修复时可选）',
+        },
+      },
+      required: ['branchName', 'files', 'prTitle', 'prBody'],
     },
   },
 ]

@@ -1,0 +1,24 @@
+// Production Schema — PostgreSQL 版本
+// 使用方式：
+//   cp prisma/schema.production.prisma prisma/schema.prisma
+//   npx prisma db push
+//   npx prisma generate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── 以下为完整 Schema（与 schema.prisma 相同）─────────────────────
+// 注意：此文件仅为 PostgreSQL 配置示例
+// 实际使用时，修改 schema.prisma 的 provider 即可
+
+// 生产环境建议：
+// 1. 使用 PostgreSQL 14+
+// 2. 启用连接池（PgBouncer）
+// 3. 配置备份策略
+// 4. 启用 SSL 连接

@@ -4,6 +4,9 @@
  * Uses Claude to understand user intent and route to the appropriate Agent.
  * Supports single-agent routing and multi-agent task decomposition.
  * Falls back to keyword-based routing on LLM failure.
+ *
+ * Self-improvement: Uses routing weights from feedback-loop to dynamically
+ * adjust routing decisions based on historical performance.
  */
 
 import { getLLMProvider } from '@/lib/llm'
@@ -11,6 +14,7 @@ import type { LLMToolDefinition } from '@/lib/llm/types'
 import { getAgents } from './registry'
 import { routeMessage } from './router'
 import type { AgentId, RouteDecision, RouteMessageInput } from './types'
+import { getRoutingWeight, analyzeAgentPerformance } from '@/lib/learning/feedback-loop'
 
 const CEO_SYSTEM_PROMPT = `You are the CEO Agent (Elon) of CoWorker, an AI production system.
 
@@ -25,6 +29,10 @@ ${getAgents()
   Responsibilities: ${a.responsibilities.join(', ')}`
   )
   .join('\n')}
+
+## Performance Insights
+
+${buildPerformanceInsights()}
 
 ## Decision Logic
 
@@ -45,6 +53,31 @@ ${getAgents()
 ## Output
 
 Use route_to_agent for single-agent routing, or decompose_task for multi-agent decomposition.`
+
+/**
+ * Build performance insights from historical routing data
+ * This is the self-improvement loop: routing weights influence future decisions
+ */
+function buildPerformanceInsights(): string {
+  try {
+    const stats = analyzeAgentPerformance()
+    if (stats.length === 0) return '(No historical performance data yet)'
+
+    const lines: string[] = []
+    for (const s of stats) {
+      const successPct = (s.successRate * 100).toFixed(0)
+      const strongest = s.strongestTaskTypes.slice(0, 2).map((t) => `${t.type}(${(t.successRate * 100).toFixed(0)}%)`).join(', ')
+      const weakest = s.weakestTaskTypes.slice(0, 2).map((t) => `${t.type}(${(t.successRate * 100).toFixed(0)}%)`).join(', ')
+      lines.push(`- ${s.agentId}: ${successPct}% success rate | Strong: ${strongest || 'N/A'} | Weak: ${weakest || 'N/A'}`)
+    }
+
+    return lines.length > 0
+      ? `Based on historical performance:\n${lines.join('\n')}\nConsider these patterns when routing.`
+      : '(No historical performance data yet)'
+  } catch {
+    return '(Performance data unavailable)'
+  }
+}
 
 /** 子任务定义 */
 const ROUTER_LLM_TIMEOUT_MS = Number(process.env.ROUTER_LLM_TIMEOUT_MS ?? 5000)
@@ -156,11 +189,12 @@ const routeTool: LLMToolDefinition = {
 }
 
 function buildRouteDecisionFromToolUse(
-  toolInput: Record<string, unknown>
+  toolInput: Record<string, unknown>,
+  taskType?: string,
 ): RouteDecision {
   const decisionType = (toolInput.decisionType as string) ?? 'chat_only'
   const targetAgentId = toolInput.targetAgentId as AgentId | undefined
-  const confidence = typeof toolInput.confidence === 'number' ? toolInput.confidence : 0.7
+  let confidence = typeof toolInput.confidence === 'number' ? toolInput.confidence : 0.7
   const reason = (toolInput.reason as string) ?? 'LLM routing decision'
   const matchedSignals = Array.isArray(toolInput.matchedSignals)
     ? toolInput.matchedSignals.map(String)
@@ -170,6 +204,13 @@ function buildRouteDecisionFromToolUse(
     decisionType === 'needs_human_confirmation' ||
     (typeof toolInput.requiresHumanConfirmation === 'boolean' &&
       toolInput.requiresHumanConfirmation)
+
+  // Self-improvement: Apply routing weights based on historical performance
+  if (targetAgentId && taskType) {
+    const weight = getRoutingWeight(targetAgentId, taskType)
+    // Adjust confidence by weight (weight > 1.0 boosts, < 1.0 reduces)
+    confidence = Math.max(0, Math.min(1, confidence * weight))
+  }
 
   const status =
     decisionType === 'needs_human_confirmation'

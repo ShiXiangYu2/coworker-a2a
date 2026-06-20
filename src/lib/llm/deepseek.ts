@@ -309,7 +309,7 @@ export class DeepSeekLLMProvider implements LLMProvider {
     // 转换工具格式为 Anthropic 格式
     if (options?.tools && options.tools.length > 0) {
       requestBody.tools = options.tools.map((t) => ({
-        name: t.name,
+        name: sanitizeToolName(t.name),
         description: t.description,
         input_schema: t.input_schema,
       }))
@@ -357,7 +357,7 @@ export class DeepSeekLLMProvider implements LLMProvider {
         content += block.text || ''
       } else if (block.type === 'tool_use') {
         toolUse = {
-          name: block.name || '',
+          name: unsanitizeToolName(block.name || ''),
           input: block.input || {},
         }
       }
@@ -387,7 +387,7 @@ export class DeepSeekLLMProvider implements LLMProvider {
       requestBody.tools = options.tools.map((t) => ({
         type: 'function',
         function: {
-          name: t.name,
+          name: sanitizeToolName(t.name),
           description: t.description,
           parameters: t.input_schema,
         },
@@ -445,12 +445,12 @@ export class DeepSeekLLMProvider implements LLMProvider {
       const toolCall = choice.message.tool_calls[0]
       try {
         toolUse = {
-          name: toolCall.function.name,
+          name: unsanitizeToolName(toolCall.function.name),
           input: JSON.parse(toolCall.function.arguments),
         }
       } catch {
         toolUse = {
-          name: toolCall.function.name,
+          name: unsanitizeToolName(toolCall.function.name),
           input: { raw: toolCall.function.arguments },
         }
       }
@@ -553,4 +553,37 @@ function formatDeepSeekError(error: unknown): string {
 /** 延迟函数 */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * 清理工具名称，确保符合 API 要求
+ *
+ * DeepSeek API 要求工具名匹配 ^[a-zA-Z0-9_-]+$
+ * 我们的工具名包含 .（如 read.project_context），需要替换为 _
+ */
+function sanitizeToolName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '_')
+}
+
+/**
+ * 还原工具名称（反向映射）
+ *
+ * 将 API 返回的清理后名称映射回原始名称
+ */
+const TOOL_NAME_REVERSE_MAP: Record<string, string> = {}
+
+function unsanitizeToolName(sanitized: string): string {
+  // 如果有反向映射，使用它
+  if (TOOL_NAME_REVERSE_MAP[sanitized]) {
+    return TOOL_NAME_REVERSE_MAP[sanitized]
+  }
+  // 否则返回原始名称（可能已经是原始名称）
+  return sanitized
+}
+
+/**
+ * 注册工具名称映射
+ */
+export function registerToolNameMapping(original: string, sanitized: string): void {
+  TOOL_NAME_REVERSE_MAP[sanitized] = original
 }

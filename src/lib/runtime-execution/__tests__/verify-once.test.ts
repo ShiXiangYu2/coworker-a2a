@@ -3,28 +3,22 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { verifyRuntimeDispatchJobOnce } from '../verify-once'
 
-vi.mock('../runner', () => ({
-  runRuntimeDispatchJobOnce: vi.fn(async ({ jobId, workerId, mode }) => ({
-    claim: {
-      record: { id: jobId, status: 'leased', leaseOwner: workerId },
-    },
-    start: {
-      record: { id: jobId, status: 'running', leaseOwner: workerId },
-    },
-    completion: {
-      record: { id: jobId, status: 'succeeded', leaseOwner: workerId },
-      receipt: { id: 'receipt-1', status: mode === 'dry_run' ? 'dry_run' : 'succeeded' },
-    },
-    safetyNote: 'Sprint 22 runtime execution is limited to a single scoped low-risk connector action.',
-  })),
-}))
-
 vi.mock('../repository', () => ({
   RuntimeExecutionApiError: class RuntimeExecutionApiError extends Error {
     constructor(message: string, public readonly status = 400) {
       super(message)
     }
   },
+  getRuntimeDispatchJobById: vi.fn(async (jobId) => ({
+    id: jobId,
+    status: 'running',
+    attemptCount: 1,
+    connectorId: 'obsidian_local',
+    actionType: 'write_local_markdown_draft',
+    createdAt: new Date('2026-06-19T00:00:00.000Z'),
+    startedAt: new Date('2026-06-19T00:00:00.000Z'),
+    completedAt: null,
+  })),
   listRuntimeDispatchAttempts: vi.fn(async (jobId) => [
     { id: 'attempt-1', jobId, status: 'leased' },
     { id: 'attempt-2', jobId, status: 'running' },
@@ -40,9 +34,8 @@ vi.mock('../repository', () => ({
   completeRuntimeDispatchJobObsidianWrite: vi.fn(),
 }))
 
-import { runRuntimeDispatchJobOnce } from '../runner'
 import {
-  completeRuntimeDispatchJobObsidianWrite,
+  getRuntimeDispatchJobById,
   getRuntimeExecutionReceiptByJobId,
   listRuntimeDispatchAttempts,
   listRuntimeRecoveryPoints,
@@ -65,26 +58,24 @@ describe('Sprint 22 runtime verify-once helper', () => {
     })).rejects.toThrow('workerId is required')
   })
 
-  it('runs the runner in dry_run mode and returns audit summary', async () => {
+  it('queries job state and returns audit summary with attempts, receipt, and recovery', async () => {
     const result = await verifyRuntimeDispatchJobOnce({
       jobId: 'job-1',
       workerId: 'worker-1',
       leaseDurationMs: 60000,
     })
 
-    expect(runRuntimeDispatchJobOnce).toHaveBeenCalledWith(expect.objectContaining({
-      jobId: 'job-1',
-      workerId: 'worker-1',
-      mode: 'dry_run',
-      leaseDurationMs: 60000,
-    }))
-    expect(completeRuntimeDispatchJobObsidianWrite).not.toHaveBeenCalled()
+    expect(getRuntimeDispatchJobById).toHaveBeenCalledWith('job-1')
     expect(listRuntimeDispatchAttempts).toHaveBeenCalledWith('job-1')
     expect(getRuntimeExecutionReceiptByJobId).toHaveBeenCalledWith('job-1')
     expect(listRuntimeRecoveryPoints).toHaveBeenCalledWith('job-1')
+    expect(result.ok).toBe(true)
+    expect(result.job.id).toBe('job-1')
+    expect(result.job.status).toBe('running')
     expect(result.audit.attempts).toHaveLength(2)
     expect(result.audit.receipt?.status).toBe('dry_run')
     expect(result.audit.recovery[0].recoveryKind).toBe('post_execute')
+    expect(result.safetyNote).toBeTruthy()
   })
 
   it('documents hard-denied capabilities in the runbook', () => {

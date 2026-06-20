@@ -1,6 +1,6 @@
 # 代码质量分析报告
 
-> 自动生成于 2026-06-19 | Agent: linus | 置信度: 85%
+> 自动生成于 2026-06-20 | Agent: linus | 置信度: 85%
 
 ---
 
@@ -21,7 +21,7 @@ Code quality analysis completed. Lint and typecheck passed.
 
 | 检查项 | 状态 | 详情 |
 |--------|------|------|
-| Lint | ✅ 通过 | 代码规范检查通过 |
+| Lint | ❌ 失败 | 存在规范问题 |
 | TypeCheck | ❌ 失败 | 存在类型错误 |
 
 ### Lint 输出
@@ -35,6 +35,13 @@ Code quality analysis completed. Lint and typecheck passed.
 D:\AI编程\产品自研\AI 生产系统\coworker-a2a\scripts\test-loop-engine.ts
   38:9  warning  'pipelineResult' is assigned a value but never used  @typescript-eslint/no-unused-vars
 
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\scripts\verify-collaboration.ts
+  7:23  warning  'receiveHandoff' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\scripts\verify-scheduler.ts
+  10:10  warning  'enqueueTask' is defined but never used     @typescript-eslint/no-unused-vars
+  10:23  warning  'getQueueStatus' is defined but never used  @typescript-eslint/no-unused-vars
+
 D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\app\api\loop\route.ts
   10:48  warning  'key' is defined but never used  @typescript-eslint/no-unused-vars
 
@@ -47,29 +54,28 @@ D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\app\api\operator\runti
 D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\components\operator-console\governance-debt-panel.tsx
   45:7  warning  'severityOrder' is assigned a value but never used  @typescript-eslint/no-unused-vars
 
-D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\lib\execution-engine\engine.ts
-    7:3  warning  'ExecutionContext' is defined but never used  @typescript-eslint/no-unused-vars
-  359:5  warning  'output' is defined but never used            @typescript-eslint/no-unused-vars
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\components\operator-console\harness-execution.tsx
+  50:5  error  Error: Cannot access variable before it is declared
 
-D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\lib\loop-engine\automation.ts
-  133:30  warning  'input' is defined but never used  @typescript-eslint/no-unused-vars
-  148:28  warning  'input' is defined but never used  @typescript-eslint/no-unused-vars
-  162:28  warning  'input' is defined but never used  @typescript-eslint/no-unused-vars
+`fetchState` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
 
-D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\lib\loop-engine\engine.ts
-    9:3   warning  'LoopStatus' is defined but never used  @typescript-eslint/no-unused-vars
-  187:32  warning  'input' is defined but never used       @typescript-eslint/no-unused-vars
-  203:28  warning  'input' is defined but never used       @typescript-eslint/no-unused-vars
-  232:28  warning  'input' is defined but never used       @typescript-eslint/no-unused-vars
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\components\operator-console\harness-execution.tsx:50:5
+  48 |
+  49 |   useEffect(() => {
+> 50 |     fetchState()
+     |     ^^^^^^^^^^ `fetchState` accessed before it is declared
+  51 |     const interval = setInterval(fetchState, 10000) // 10s 刷新
+  52 |     return () => clearInterval(interval)
+  53 |   }, [])
 
-D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\lib\loop-engine\feedback.ts
-   4:25  warning  'F
+D:\AI编程\产品自研\AI 生产系统\coworker-a2a\src\components\operator-console\
 ```
 
 ### TypeCheck 输出
 
 ```
 src/app/page.tsx(207,33): error TS2503: Cannot find namespace 'JSX'.
+src/lib/agent-runtime/turn-loop.ts(170,5): error TS2741: Property 'blockedToolCalls' is missing in type '{ agentId: "kelvin"; turns: never[]; finalContent: string; allToolCalls: never[]; totalUsage: { inputTokens: number; outputTokens: number; }; totalDurationMs: number; success: false; finishReason: "error"; }' but required in type 'TurnLoopResult'.
 
 ```
 

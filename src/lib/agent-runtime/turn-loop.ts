@@ -39,6 +39,8 @@ export interface TurnLoopConfig {
   maxTokens?: number
   /** 运行时模式（影响工具可用性） */
   runtimeMode?: AgentRuntimeMode
+  /** 是否允许执行工具调用（false 时工具调用被拦截并记录为 blocked） */
+  allowToolExecution?: boolean
 }
 
 export interface TurnToolCall {
@@ -82,6 +84,8 @@ export interface TurnLoopResult {
   finalContent: string
   /** 所有工具调用的扁平列表 */
   allToolCalls: TurnToolCall[]
+  /** 被拦截的工具调用列表（allowToolExecution=false 时填充） */
+  blockedToolCalls: TurnToolCall[]
   /** 总 token 用量 */
   totalUsage: { inputTokens: number; outputTokens: number }
   /** 总耗时毫秒 */
@@ -168,6 +172,7 @@ export async function runTurnLoop(
       turns: [],
       finalContent: '',
       allToolCalls: [],
+      blockedToolCalls: [],
       totalUsage: { inputTokens: 0, outputTokens: 0 },
       totalDurationMs: 0,
       success: false,
@@ -185,6 +190,7 @@ export async function runTurnLoop(
   const conversation: ChatMessage[] = [...messages]
   const turns: TurnResult[] = []
   const allToolCalls: TurnToolCall[] = []
+  const blockedToolCalls: TurnToolCall[] = []
   const totalUsage = { inputTokens: 0, outputTokens: 0 }
 
   const deadline = startTime + mergedConfig.timeoutMs
@@ -229,18 +235,26 @@ export async function runTurnLoop(
           input: result.toolUse.input,
         }
 
-        // 执行工具
-        try {
-          const execResult = await toolExecutor(result.toolUse.name, result.toolUse.input)
-          toolCall.output = execResult.output
-          toolCall.success = execResult.success
-          toolCall.error = execResult.error
-        } catch (execError) {
+        // 检查是否允许执行工具
+        const allowExecution = mergedConfig.allowToolExecution !== false
+        if (allowExecution) {
+          // 执行工具
+          try {
+            const execResult = await toolExecutor(result.toolUse.name, result.toolUse.input)
+            toolCall.output = execResult.output
+            toolCall.success = execResult.success
+            toolCall.error = execResult.error
+          } catch (execError) {
+            toolCall.success = false
+            toolCall.error = execError instanceof Error ? execError.message : String(execError)
+          }
+          allToolCalls.push(toolCall)
+        } else {
+          // 拦截工具调用
           toolCall.success = false
-          toolCall.error = execError instanceof Error ? execError.message : String(execError)
+          toolCall.error = `Tool execution blocked: ${toolCall.name}`
+          blockedToolCalls.push(toolCall)
         }
-
-        allToolCalls.push(toolCall)
 
         // 将 assistant 的 tool_use 消息加入对话
         conversation.push({
@@ -325,9 +339,10 @@ export async function runTurnLoop(
     turns,
     finalContent: lastAssistantTurn?.content ?? '',
     allToolCalls,
+    blockedToolCalls,
     totalUsage,
     totalDurationMs: Date.now() - startTime,
-    success: finished && finishReason === 'stop',
+    success: finished && (finishReason === 'stop' || finishReason === 'max_turns'),
     finishReason,
   }
 }

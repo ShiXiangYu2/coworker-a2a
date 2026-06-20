@@ -207,6 +207,18 @@ vi.mock('@/lib/prisma', () => ({
         createdAt: new Date('2026-06-19T00:00:00.000Z'),
       })),
       findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async ({ where }) => {
+        if (where?.jobId === 'job-1') {
+          return {
+            id: 'attempt-1',
+            jobId: 'job-1',
+            status: 'running',
+            attempt: 1,
+            createdAt: new Date('2026-06-19T00:00:00.000Z'),
+          }
+        }
+        return null
+      }),
     },
     runtimeExecutionReceipt: {
       create: vi.fn(async ({ data }) => ({

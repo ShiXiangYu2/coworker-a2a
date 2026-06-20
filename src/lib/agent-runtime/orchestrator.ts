@@ -23,6 +23,7 @@ import {
   type SubtaskRecord,
 } from './subtask-manager'
 import { startAgentRunFromTask } from './repository'
+import { decomposeWithLLM, replanWithLLM } from './llm-decomposer'
 
 // ─── 类型 ────────────────────────────────────────────────────────────
 
@@ -93,18 +94,16 @@ function log(level: 'info' | 'warn' | 'error', message: string, data?: Record<st
 // ─── 分解 ────────────────────────────────────────────────────────────
 
 /**
- * 使用 Elon Agent 分解复杂任务为子任务
+ * 使用 LLM 分解复杂任务为子任务
  *
- * 在 analysis_only 模式下，Elon 返回结构化的分解结果。
- * 我们解析其输出并转换为 SubtaskDefinition 列表。
+ * 优先使用 LLM 进行智能分解，LLM 不可用时回退到确定性规则。
  */
 async function decomposeTask(
   taskId: string,
   conversationId: string
-): Promise<SubtaskDefinition[]> {
+): Promise<{ subtasks: SubtaskDefinition[]; confidence: number }> {
   void conversationId
 
-  // 查询父任务信息
   const parentTask = await prisma.harmonyTask.findUnique({
     where: { id: taskId },
     select: {
@@ -119,147 +118,67 @@ async function decomposeTask(
     throw new Error(`Parent task ${taskId} not found`)
   }
 
-  // 使用 Elon Agent 进行分解
-  // 在 production 模式下，这会调用 LLM；在测试模式下，使用确定性分解
-  const subtasks = await decomposeWithElon(
+  const result = await decomposeWithLLM(
     parentTask.title,
     parentTask.description,
-    parentTask.type
+    parentTask.type,
   )
 
-  log('info', `Decomposed task into ${subtasks.length} subtasks`, {
+  log('info', `Decomposed task into ${result.subtasks.length} subtasks (confidence: ${result.confidence})`, {
     taskId,
-    subtasks: subtasks.map((s) => ({ title: s.title, agentId: s.targetAgentId })),
+    reasoning: result.reasoning,
+    subtasks: result.subtasks.map((s) => ({ title: s.title, agentId: s.targetAgentId })),
   })
 
-  return subtasks
+  return { subtasks: result.subtasks, confidence: result.confidence }
 }
 
+// ─── 重规划 ──────────────────────────────────────────────────────────
+
 /**
- * 使用 Elon Agent 进行任务分解
+ * 当子任务失败时，使用 LLM 重新规划
  *
- * 根据任务类型和内容，确定性地生成子任务列表。
- * 生产环境中应替换为 LLM 调用。
+ * 分析失败原因，生成替代子任务，追加到现有编排中。
  */
-async function decomposeWithElon(
-  title: string,
-  description: string,
-  taskType: string
-): Promise<SubtaskDefinition[]> {
-  // 基于任务类型的确定性分解规则
-  const subtasks: SubtaskDefinition[] = []
+async function replanFailedSubtasks(
+  subtaskRecords: SubtaskRecord[],
+  parentTitle: string,
+  parentDescription: string,
+  conversationId: string,
+): Promise<SubtaskRecord[]> {
+  const failed = subtaskRecords.filter((s) => s.status === 'failed')
+  if (failed.length === 0) return []
 
-  // 产品任务 → Jobs 分析需求 + Linus 评估技术
-  if (taskType === 'product') {
-    subtasks.push({
-      title: `需求分析: ${title}`,
-      description: `分析以下需求的完整性和可行性: ${description}`,
-      targetAgentId: 'jobs',
-      type: 'product',
-      dependsOn: [],
-      priority: 'high',
-    })
-    subtasks.push({
-      title: `技术评估: ${title}`,
-      description: `评估以下需求的技术实现方案: ${description}`,
-      targetAgentId: 'linus',
-      type: 'engineering',
-      dependsOn: [0], // 依赖需求分析
-      priority: 'medium',
-    })
+  log('info', `Replanning ${failed.length} failed subtasks`)
+
+  const result = await replanWithLLM(
+    subtaskRecords.map((s) => ({
+      title: s.definition.title,
+      description: s.definition.description,
+      targetAgentId: s.definition.targetAgentId,
+      status: s.status,
+      error: s.error,
+      resultSummary: s.resultSummary,
+    })),
+    parentTitle,
+    parentDescription,
+  )
+
+  if (result.subtasks.length === 0) {
+    log('info', 'Replanning produced no replacement subtasks', { reasoning: result.reasoning })
+    return []
   }
 
-  // 工程任务 → Linus 设计 + Turing 验证
-  else if (taskType === 'engineering') {
-    subtasks.push({
-      title: `架构设计: ${title}`,
-      description: `设计以下功能的架构方案: ${description}`,
-      targetAgentId: 'linus',
-      type: 'engineering',
-      dependsOn: [],
-      priority: 'high',
-    })
-    subtasks.push({
-      title: `质量验证: ${title}`,
-      description: `验证以下设计的质量和安全性: ${description}`,
-      targetAgentId: 'turing',
-      type: 'verification',
-      dependsOn: [0], // 依赖架构设计
-      priority: 'medium',
-    })
-  }
+  log('info', `Replanning generated ${result.subtasks.length} replacement subtasks`, {
+    reasoning: result.reasoning,
+    confidence: result.confidence,
+    subtasks: result.subtasks.map((s) => ({ title: s.title, agentId: s.targetAgentId })),
+  })
 
-  // 验证任务 → Turing 检查 + Bezos 评估业务价值
-  else if (taskType === 'verification') {
-    subtasks.push({
-      title: `质量检查: ${title}`,
-      description: `检查以下内容的质量: ${description}`,
-      targetAgentId: 'turing',
-      type: 'verification',
-      dependsOn: [],
-      priority: 'high',
-    })
-    subtasks.push({
-      title: `业务价值评估: ${title}`,
-      description: `评估以下内容的业务价值: ${description}`,
-      targetAgentId: 'bezos',
-      type: 'customer',
-      dependsOn: [0], // 依赖质量检查
-      priority: 'low',
-    })
-  }
-
-  // 客户任务 → Bezos 分析 + Jobs 产品化
-  else if (taskType === 'customer') {
-    subtasks.push({
-      title: `客户反馈分析: ${title}`,
-      description: `分析以下客户反馈: ${description}`,
-      targetAgentId: 'bezos',
-      type: 'customer',
-      dependsOn: [],
-      priority: 'high',
-    })
-    subtasks.push({
-      title: `产品化建议: ${title}`,
-      description: `基于客户反馈给出产品化建议: ${description}`,
-      targetAgentId: 'jobs',
-      type: 'product',
-      dependsOn: [0], // 依赖客户分析
-      priority: 'medium',
-    })
-  }
-
-  // 协调任务 → 并行执行多个 Agent
-  else {
-    subtasks.push(
-      {
-        title: `产品视角: ${title}`,
-        description: `从产品角度分析: ${description}`,
-        targetAgentId: 'jobs',
-        type: 'product',
-        dependsOn: [],
-        priority: 'medium',
-      },
-      {
-        title: `工程视角: ${title}`,
-        description: `从工程角度分析: ${description}`,
-        targetAgentId: 'linus',
-        type: 'engineering',
-        dependsOn: [],
-        priority: 'medium',
-      },
-      {
-        title: `质量视角: ${title}`,
-        description: `从质量角度分析: ${description}`,
-        targetAgentId: 'turing',
-        type: 'verification',
-        dependsOn: [],
-        priority: 'medium',
-      }
-    )
-  }
-
-  return subtasks
+  // 创建新的子任务记录
+  const newRecords = await createSubtasks(result.subtasks, subtaskRecords[0]?.harmonyTaskId ?? '', conversationId)
+  const startIndex = subtaskRecords.length
+  return newRecords.map((r, i) => ({ ...r, index: startIndex + i }))
 }
 
 // ─── 执行 ────────────────────────────────────────────────────────────
@@ -488,8 +407,9 @@ export async function runOrchestration(
     strategy: input.decompositionStrategy,
   })
 
-  // 1. 分解任务
-  const subtaskDefs = await decomposeTask(input.taskId, input.conversationId)
+  // 1. 分解任务（LLM 驱动）
+  const decomposition = await decomposeTask(input.taskId, input.conversationId)
+  const subtaskDefs = decomposition.subtasks
 
   if (subtaskDefs.length === 0) {
     return {
@@ -502,7 +422,7 @@ export async function runOrchestration(
       summaryReason: 'Empty decomposition',
       needsHumanReview: false,
       audit: {
-        decompositionConfidence: 0,
+        decompositionConfidence: decomposition.confidence,
         executionTime: Date.now() - startTime,
         subtasksTotal: 0,
         subtasksSucceeded: 0,
@@ -524,6 +444,7 @@ export async function runOrchestration(
 
   await recordAuditEvent(orchestrationId, input.taskId, 'decomposition_complete', {
     subtaskCount: subtaskRecords.length,
+    decompositionConfidence: decomposition.confidence,
     subtasks: subtaskRecords.map((s) => ({
       title: s.definition.title,
       agentId: s.definition.targetAgentId,
@@ -538,6 +459,45 @@ export async function runOrchestration(
     input.maxParallel,
     maxRetries
   )
+
+  // 4. 重规划：如果有失败的子任务，尝试 LLM 重新规划
+  const hasFailed = subtaskRecords.some((s) => s.status === 'failed')
+  if (hasFailed) {
+    const parentTask = await prisma.harmonyTask.findUnique({
+      where: { id: input.taskId },
+      select: { title: true, description: true },
+    })
+
+    if (parentTask) {
+      const replannedRecords = await replanFailedSubtasks(
+        subtaskRecords,
+        parentTask.title,
+        parentTask.description,
+        input.conversationId,
+      )
+
+      if (replannedRecords.length > 0) {
+        await recordAuditEvent(orchestrationId, input.taskId, 'replan_complete', {
+          replannedCount: replannedRecords.length,
+          subtasks: replannedRecords.map((s) => ({
+            title: s.definition.title,
+            agentId: s.definition.targetAgentId,
+          })),
+        })
+
+        // 执行重规划的子任务
+        const replanResults = await executeBatch(
+          replannedRecords,
+          input.conversationId,
+          input.maxParallel,
+          maxRetries,
+        )
+
+        // 合并结果
+        subtaskRecords = [...subtaskRecords, ...replanResults]
+      }
+    }
+  }
 
   await recordAuditEvent(orchestrationId, input.taskId, 'execution_complete', {
     results: subtaskRecords.map((s) => ({
@@ -583,7 +543,7 @@ export async function runOrchestration(
     summaryReason: summaryResult.summaryReason,
     needsHumanReview: summaryResult.needsHumanReview,
     audit: {
-      decompositionConfidence: 0.8,
+      decompositionConfidence: decomposition.confidence,
       executionTime,
       subtasksTotal: subtaskRecords.length,
       subtasksSucceeded: collected.completedCount,
