@@ -1,26 +1,6 @@
 import type { Metadata } from 'next'
-import { Space_Grotesk, DM_Sans, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
-
-const spaceGrotesk = Space_Grotesk({
-  variable: '--font-heading',
-  subsets: ['latin'],
-  display: 'swap',
-  weight: ['400', '500', '600', '700'],
-})
-
-const dmSans = DM_Sans({
-  variable: '--font-sans',
-  subsets: ['latin'],
-  display: 'swap',
-  weight: ['400', '500', '700'],
-})
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: '--font-mono',
-  subsets: ['latin'],
-  display: 'swap',
-})
+import { ThemeProvider } from '@/components/theme-provider'
 
 export const metadata: Metadata = {
   title: 'CoWorker+A2A',
@@ -35,9 +15,12 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`${spaceGrotesk.variable} ${dmSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className="h-full antialiased"
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   )
 }

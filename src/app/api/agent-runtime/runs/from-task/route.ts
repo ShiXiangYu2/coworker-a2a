@@ -1,7 +1,8 @@
 import { startAgentRunFromTask } from '@/lib/agent-runtime/repository'
 import { agentRuntimeErrorResponse, readJson } from '../../_shared'
+import { withAuth } from '@/lib/auth/middleware'
 
-export async function POST(request: Request) {
+export const POST = withAuth(async (request) => {
   try {
     const body = await readJson(request)
 
@@ -35,4 +36,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return agentRuntimeErrorResponse(error)
   }
-}
+})

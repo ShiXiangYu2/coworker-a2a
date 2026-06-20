@@ -7,8 +7,9 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { withAuth } from '@/lib/auth/middleware'
 
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     // 活跃任务数
     const activeTasks = await prisma.harmonyTask.count({
@@ -108,4 +109,4 @@ export async function GET() {
     const message = error instanceof Error ? error.message : String(error)
     return Response.json({ ok: false, error: message }, { status: 500 })
   }
-}
+})

@@ -1,0 +1,88 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "filter": "Filter",
+    "refresh": "Refresh",
+    "export": "Export",
+    "import": "Import",
+    "settings": "Settings",
+    "logout": "Logout",
+    "login": "Login",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Submit",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "finish": "Finish",
+    "yes": "Yes",
+    "no": "No",
+    "ok": "OK",
+    "close": "Close"
+  },
+  "nav": {
+    "overview": "Overview",
+    "tasks": "Task Flow",
+    "execution": "Execution",
+    "governance": "Governance",
+    "knowledge": "Knowledge",
+    "settings": "Settings"
+  },
+  "harness": {
+    "title": "HARNESS Console",
+    "overview": "System Overview",
+    "activeTasks": "Active Tasks",
+    "runningAgents": "Running Agents",
+    "blockages": "Blockages",
+    "reviewFindings": "Review Findings",
+    "recentEvents": "Recent Events",
+    "lifecycleDistribution": "Lifecycle Distribution"
+  },
+  "task": {
+    "title": "Task",
+    "create": "Create Task",
+    "status": "Status",
+    "priority": "Priority",
+    "agent": "Agent",
+    "confidence": "Confidence",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At"
+  },
+  "agent": {
+    "title": "Agent",
+    "execute": "Execute",
+    "status": "Status",
+    "toolCalls": "Tool Calls",
+    "duration": "Duration"
+  },
+  "monitoring": {
+    "title": "Monitoring",
+    "health": "Health Status",
+    "metrics": "Metrics",
+    "cost": "Cost",
+    "budget": "Budget",
+    "uptime": "Uptime"
+  },
+  "knowledge": {
+    "title": "Knowledge Base",
+    "search": "Search Knowledge",
+    "create": "Create Knowledge",
+    "type": "Type",
+    "tags": "Tags"
+  },
+  "auth": {
+    "loginTitle": "Login to CoWorker+A2A",
+    "loginSubtitle": "Enter your credentials",
+    "loginButton": "Login",
+    "loginError": "Login failed",
+    "logoutSuccess": "Logged out successfully"
+  }
+}

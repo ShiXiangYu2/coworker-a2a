@@ -1,5 +1,6 @@
 import { handleAgentRouterPost } from './handler'
+import { withAuth } from '@/lib/auth/middleware'
 
-export async function POST(request: Request) {
+export const POST = withAuth(async (request) => {
   return handleAgentRouterPost(request)
-}
+})

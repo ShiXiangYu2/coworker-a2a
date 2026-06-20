@@ -12,8 +12,9 @@
  */
 
 import { searchKnowledge, createKnowledge, getKnowledgeStats } from '@/lib/knowledge/repository'
+import { withAuth } from '@/lib/auth/middleware'
 
-export async function GET(request: Request) {
+export const GET = withAuth(async (request) => {
   const url = new URL(request.url)
   const view = url.searchParams.get('view') ?? 'search'
 
@@ -35,9 +36,9 @@ export async function GET(request: Request) {
     const message = error instanceof Error ? error.message : String(error)
     return Response.json({ ok: false, error: message }, { status: 500 })
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withAuth(async (request) => {
   try {
     const body = await request.json()
     const entry = await createKnowledge(body)
@@ -46,4 +47,4 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : String(error)
     return Response.json({ ok: false, error: message }, { status: 500 })
   }
-}
+})

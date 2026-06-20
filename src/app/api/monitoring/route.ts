@@ -8,8 +8,9 @@
  */
 
 import { getMonitoringData, checkSystemHealth, getMetricsSummary, checkBudget } from '@/lib/monitoring'
+import { withAuth } from '@/lib/auth/middleware'
 
-export async function GET(request: Request) {
+export const GET = withAuth(async (request) => {
   const url = new URL(request.url)
   const view = url.searchParams.get('view') ?? 'full'
 
@@ -45,4 +46,4 @@ export async function GET(request: Request) {
     const message = error instanceof Error ? error.message : String(error)
     return Response.json({ ok: false, error: message }, { status: 500 })
   }
-}
+})
