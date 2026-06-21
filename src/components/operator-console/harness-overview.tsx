@@ -34,12 +34,6 @@ export function HarnessOverview() {
   const [stats, setStats] = useState<OverviewStats | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchStats()
-    const interval = setInterval(fetchStats, 30000) // 30s 刷新
-    return () => clearInterval(interval)
-  }, [])
-
   async function fetchStats() {
     try {
       const res = await fetch('/api/operator/harness-overview')
@@ -60,6 +54,15 @@ export function HarnessOverview() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const timeout = window.setTimeout(fetchStats, 0)
+    const interval = window.setInterval(fetchStats, 30000) // 30s 刷新
+    return () => {
+      window.clearTimeout(timeout)
+      window.clearInterval(interval)
+    }
+  }, [])
 
   if (loading) {
     return <div className="p-6 text-gray-500">Loading HARNESS overview...</div>

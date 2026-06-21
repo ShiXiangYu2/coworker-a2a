@@ -2,17 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { prisma } from '@/lib/prisma'
 import type { RouteDecision } from '@/lib/agents/types'
 import { createTaskFromRoute } from '@/lib/harmony/repository'
+import { authenticatedJsonRequest, authenticatedRequest } from '../../__tests__/auth-helpers'
 import { POST as startRun } from '../runs/from-task/route'
 import { GET as getRun } from '../runs/[id]/route'
 import { POST as cancelRun } from '../runs/[id]/cancel/route'
 import { GET as listRuns } from '../../harmony/tasks/[id]/agent-runs/route'
 
 function request(body: unknown): Request {
-  return new Request('http://localhost/api/agent-runtime/runs/from-task', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  return authenticatedJsonRequest('http://localhost/api/agent-runtime/runs/from-task', body)
 }
 
 function decision(overrides: Partial<RouteDecision> = {}): RouteDecision {
@@ -199,7 +196,7 @@ describe('Agent Runtime API', () => {
     const listBody = await list.json()
     expect(listBody).toHaveLength(1)
 
-    const cancel = await cancelRun(new Request('http://localhost', { method: 'POST' }), {
+    const cancel = await cancelRun(authenticatedRequest('http://localhost', { method: 'POST' }), {
       params: Promise.resolve({ id: createdBody.agentRun.id }),
     })
     expect(cancel.status).toBe(400)

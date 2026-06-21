@@ -16,7 +16,6 @@ import type {
   RequeueJobInput,
   RegisterWorkerInput,
   UpdateHeartbeatInput,
-  WorkerCapability,
 } from './types'
 
 // ─── 错误类 ────────────────────────────────────────────────────
@@ -274,6 +273,31 @@ export async function failJob(
 }
 
 /**
+ * 标记任务阻塞
+ * 权限、审批、scope 或 runtime token gate 失败时使用；不自动重试。
+ */
+export async function blockJob(
+  jobId: string,
+  reason: Record<string, unknown>,
+  now?: Date
+): Promise<{ record: QueueJobRecord }> {
+  const currentTime = now ?? new Date()
+
+  const record = await prisma.taskQueueJob.update({
+    where: { id: jobId },
+    data: {
+      status: 'blocked',
+      completedAt: currentTime,
+      assignedWorkerId: null,
+      leaseExpiresAt: null,
+      lastErrorJson: toJson(reason),
+    },
+  })
+
+  return { record: toQueueJobRecord(record) }
+}
+
+/**
  * 重新入队任务
  * retryCount++，状态恢复为 pending
  */
@@ -502,6 +526,7 @@ export async function createWorkerAuditEvent(input: {
       correlationId: input.correlationId,
       eventType: input.eventType,
       actorType: 'worker_daemon',
+      actorId: input.actorId,
       reason: input.reason,
       payloadJson: input.payload ? toJson(input.payload) : null,
     },

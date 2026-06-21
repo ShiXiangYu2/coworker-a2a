@@ -14,6 +14,9 @@
  *   WORKER_HEARTBEAT_MS     心跳间隔毫秒（默认 30000）
  *   WORKER_LEASE_MS         Lease 时长毫秒（默认 120000）
  *   WORKER_JOB_TIMEOUT_MS   任务超时毫秒（默认 60000）
+ *   WORKER_RUNTIME_MODE     runtime 执行模式：dry_run | obsidian_write（默认 dry_run）
+ *   WORKER_EXECUTE_REAL     是否允许真实低风险连接器执行（默认 false）
+ *   WORKER_VAULT_PATH       Obsidian vault 根目录（仅 obsidian_write 使用）
  *
  * 示例：
  *   # 默认启动
@@ -56,6 +59,10 @@ function generateWorkerId(): string {
   return `worker-${random}`
 }
 
+function parseRuntimeMode(value: string | undefined): WorkerConfig['runtimeMode'] {
+  return value === 'obsidian_write' ? 'obsidian_write' : 'dry_run'
+}
+
 // ─── 配置 ──────────────────────────────────────────────────────
 
 const config: WorkerConfig = {
@@ -66,6 +73,9 @@ const config: WorkerConfig = {
   heartbeatIntervalMs: parseNumber(process.env.WORKER_HEARTBEAT_MS, 30000),
   leaseDurationMs: parseNumber(process.env.WORKER_LEASE_MS, 120000),
   jobTimeoutMs: parseNumber(process.env.WORKER_JOB_TIMEOUT_MS, 60000),
+  runtimeMode: parseRuntimeMode(process.env.WORKER_RUNTIME_MODE),
+  executeRealConnectors: process.env.WORKER_EXECUTE_REAL === 'true',
+  vaultPath: process.env.WORKER_VAULT_PATH,
 }
 
 // ─── 主函数 ────────────────────────────────────────────────────
@@ -83,6 +93,9 @@ async function main() {
   console.log(`  Heartbeat Interval: ${config.heartbeatIntervalMs}ms`)
   console.log(`  Lease Duration:     ${config.leaseDurationMs}ms`)
   console.log(`  Job Timeout:        ${config.jobTimeoutMs}ms`)
+  console.log(`  Runtime Mode:       ${config.runtimeMode}`)
+  console.log(`  Real Connectors:    ${config.executeRealConnectors ? 'enabled' : 'disabled'}`)
+  if (config.vaultPath) console.log(`  Vault Path:         ${config.vaultPath}`)
   console.log()
   console.log('Safety Note:')
   console.log('  Sprint 23 Worker Daemon provides asynchronous task execution.')

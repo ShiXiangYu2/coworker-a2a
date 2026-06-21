@@ -9,6 +9,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
+import { seedAgentDirectorGlossary } from '../src/lib/concept-governance/agent-director-glossary'
 
 const prisma = new PrismaClient()
 
@@ -183,6 +184,10 @@ async function main() {
 
     console.log(`  ✅ ${dept.displayName} (roles: ${dept.roles.map((r) => r.roleKey).join(', ')})`)
   }
+
+  console.log('🌱 Seeding Agent director glossary core terms...')
+  const glossary = await seedAgentDirectorGlossary(prisma)
+  console.log(`  ✅ Agent director glossary terms upserted: ${glossary.upserted}`)
 
   console.log('🌱 Seeding complete.')
 }

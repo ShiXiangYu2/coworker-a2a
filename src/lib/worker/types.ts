@@ -29,6 +29,7 @@ export type QueueJobStatus =
   | 'running'     // 执行中
   | 'completed'   // 完成
   | 'failed'      // 失败
+  | 'blocked'     // 权限或治理边界阻塞，需人工介入
   | 'dead_letter' // 死信（重试耗尽）
 
 /** 任务优先级 */
@@ -58,6 +59,12 @@ export interface WorkerConfig {
   leaseDurationMs: number
   /** 单任务超时（毫秒） */
   jobTimeoutMs: number
+  /** Runtime 执行模式：默认 dry_run，真实 Obsidian 写入必须显式开启 */
+  runtimeMode?: 'dry_run' | 'obsidian_write'
+  /** 是否允许真实低风险连接器执行；只有 runtimeMode=obsidian_write 且 true 时生效 */
+  executeRealConnectors?: boolean
+  /** Obsidian vault 根目录，用于显式真实写入 */
+  vaultPath?: string
 }
 
 /** Worker 运行时状态 */
@@ -123,8 +130,19 @@ export type WorkerEvent =
   | { type: 'worker_stopped'; workerId: string; timestamp: Date }
   | { type: 'job_leased'; workerId: string; jobId: string; taskId: string; timestamp: Date }
   | { type: 'job_started'; workerId: string; jobId: string; timestamp: Date }
-  | { type: 'job_completed'; workerId: string; jobId: string; durationMs: number; timestamp: Date }
+  | {
+      type: 'job_completed'
+      workerId: string
+      jobId: string
+      queueJobId: string
+      runtimeJobId?: string
+      receiptId?: string
+      receiptStatus?: string
+      durationMs: number
+      timestamp: Date
+    }
   | { type: 'job_failed'; workerId: string; jobId: string; error: string; timestamp: Date }
+  | { type: 'job_blocked'; workerId: string; jobId: string; reason: string; timestamp: Date }
   | { type: 'job_requeued'; workerId: string; jobId: string; retryCount: number; timestamp: Date }
   | { type: 'job_dead_lettered'; workerId: string; jobId: string; reason: string; timestamp: Date }
   | { type: 'heartbeat'; workerId: string; status: HeartbeatStatus; metrics: Record<string, unknown>; timestamp: Date }
@@ -235,6 +253,7 @@ export const QUEUE_JOB_STATUSES: readonly QueueJobStatus[] = [
   'running',
   'completed',
   'failed',
+  'blocked',
   'dead_letter',
 ]
 

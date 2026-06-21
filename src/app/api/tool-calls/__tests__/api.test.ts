@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { prisma } from '@/lib/prisma'
 import type { RouteDecision } from '@/lib/agents/types'
 import { createTaskFromRoute } from '@/lib/harmony/repository'
+import { authenticatedJsonRequest } from '../../__tests__/auth-helpers'
 import { POST as startRun } from '../../agent-runtime/runs/from-task/route'
 import { POST as createToolCalls } from '../from-agent-result/route'
 import { POST as evaluatePermission } from '../[id]/evaluate-permission/route'
@@ -15,6 +16,10 @@ function jsonRequest(url: string, body: unknown): Request {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+}
+
+function authJsonRequest(url: string, body: unknown): Request {
+  return authenticatedJsonRequest(url, body)
 }
 
 function decision(overrides: Partial<RouteDecision> = {}): RouteDecision {
@@ -46,7 +51,7 @@ async function createAgentRun() {
     routeDecision: decision(),
   })
   const response = await startRun(
-    jsonRequest('http://localhost/api/agent-runtime/runs/from-task', {
+    authJsonRequest('http://localhost/api/agent-runtime/runs/from-task', {
       taskId: taskBundle.task!.id,
       idempotencyKey: `agent-${taskBundle.task!.id}`,
     })

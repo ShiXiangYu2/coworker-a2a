@@ -41,10 +41,6 @@ export function HarnessTaskFlow() {
   const [loading, setLoading] = useState(true)
   const [selectedStage, setSelectedStage] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchTasks()
-  }, [])
-
   async function fetchTasks() {
     try {
       const res = await fetch('/api/operator/harness-task-flow')
@@ -56,6 +52,11 @@ export function HarnessTaskFlow() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const timeout = window.setTimeout(fetchTasks, 0)
+    return () => window.clearTimeout(timeout)
+  }, [])
 
   if (loading) return <div className="p-6 text-gray-500">Loading task flow...</div>
 

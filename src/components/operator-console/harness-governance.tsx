@@ -57,10 +57,6 @@ export function HarnessGovernance() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'judgments' | 'debts' | 'audits'>('judgments')
 
-  useEffect(() => {
-    fetchData()
-  }, [])
-
   async function fetchData() {
     try {
       const res = await fetch('/api/operator/harness-governance')
@@ -77,6 +73,11 @@ export function HarnessGovernance() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const timeout = window.setTimeout(fetchData, 0)
+    return () => window.clearTimeout(timeout)
+  }, [])
 
   if (loading) return <div className="p-6 text-gray-500">Loading governance ledger...</div>
 

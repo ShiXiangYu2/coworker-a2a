@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { prisma } from '@/lib/prisma'
 import type { RouteDecision } from '@/lib/agents/types'
 import { createTaskFromRoute } from '@/lib/harmony/repository'
+import { authenticatedJsonRequest } from '../../__tests__/auth-helpers'
 import { POST as startRun } from '../../agent-runtime/runs/from-task/route'
 import { POST as contextFromTask } from '../../context-packets/from-task/route'
 import { POST as contextFromAgentRun } from '../../context-packets/from-agent-run/route'
@@ -19,6 +20,10 @@ function jsonRequest(url: string, body: unknown): Request {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+}
+
+function authJsonRequest(url: string, body: unknown): Request {
+  return authenticatedJsonRequest(url, body)
 }
 
 function decision(overrides: Partial<RouteDecision> = {}): RouteDecision {
@@ -88,7 +93,7 @@ describe('Sprint 5 Memory / Knowledge / Context / A2A API', () => {
   it('creates audit-only ContextPacket for completed AgentRun', async () => {
     const taskBundle = await createQueuedTask()
     const created = await startRun(
-      jsonRequest('http://localhost/api/agent-runtime/runs/from-task', {
+      authJsonRequest('http://localhost/api/agent-runtime/runs/from-task', {
         taskId: taskBundle.task!.id,
         idempotencyKey: 'agent-run-s5',
       })
@@ -110,7 +115,7 @@ describe('Sprint 5 Memory / Knowledge / Context / A2A API', () => {
   it('rejects ContextPacket attach for failed AgentRun', async () => {
     const taskBundle = await createQueuedTask()
     const created = await startRun(
-      jsonRequest('http://localhost/api/agent-runtime/runs/from-task', {
+      authJsonRequest('http://localhost/api/agent-runtime/runs/from-task', {
         taskId: taskBundle.task!.id,
         idempotencyKey: 'agent-run-failed-context',
       })
@@ -135,7 +140,7 @@ describe('Sprint 5 Memory / Knowledge / Context / A2A API', () => {
   it('creates and approves MemoryEntry candidates without triggering AgentRun', async () => {
     const taskBundle = await createQueuedTask()
     const created = await startRun(
-      jsonRequest('http://localhost/api/agent-runtime/runs/from-task', {
+      authJsonRequest('http://localhost/api/agent-runtime/runs/from-task', {
         taskId: taskBundle.task!.id,
         idempotencyKey: 'agent-run-memory',
       })

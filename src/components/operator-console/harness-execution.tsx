@@ -46,12 +46,6 @@ export function HarnessExecution() {
   const [state, setState] = useState<ExecutionState | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchState()
-    const interval = setInterval(fetchState, 10000) // 10s 刷新
-    return () => clearInterval(interval)
-  }, [])
-
   async function fetchState() {
     try {
       const res = await fetch('/api/operator/harness-execution')
@@ -68,6 +62,15 @@ export function HarnessExecution() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const timeout = window.setTimeout(fetchState, 0)
+    const interval = window.setInterval(fetchState, 10000) // 10s 刷新
+    return () => {
+      window.clearTimeout(timeout)
+      window.clearInterval(interval)
+    }
+  }, [])
 
   if (loading) return <div className="p-6 text-gray-500">Loading execution state...</div>
 
